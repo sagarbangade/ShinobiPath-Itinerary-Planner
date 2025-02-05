@@ -14,8 +14,10 @@ import {
   Share as ShareIcon,
   Download as DownloadIcon,
   Visibility as VisibilityIcon,
-  Print as PrintIcon, // Added Print Icon
-  FilterList as FilterListIcon, // Added Filter Icon
+  Print as PrintIcon,
+  FilterList as FilterListIcon,
+  Check as CheckIcon, // For Filter confirmation
+  Clear as ClearIcon, // For filter clearing/resetting
 } from "@mui/icons-material";
 import {
   TextField,
@@ -37,13 +39,15 @@ import {
   Box,
   Typography,
   FormHelperText,
-  Grid, // Added Grid Layout
-  Card, // Added Card Component
-  CardContent, // Added Card Content
-  Tooltip, //Added Tooltip
-  Menu, //Added Menu for filter
-  MenuList, //Added Menu List for fitler
-  ListItemIcon, //List icon for Filter
+  Grid,
+  Card,
+  CardContent,
+  Tooltip,
+  Menu,
+  MenuList,
+  ListItemIcon,
+  Divider, // Added Divider for visual separation
+  CircularProgress, // Added loading indicator
 } from "@mui/material";
 
 import { Calendar, momentLocalizer } from "react-big-calendar";
@@ -77,7 +81,6 @@ const EXPENSE_CATEGORIES = [
 const REMINDER_TYPES = ["activity", "reservation", "transportation", "other"];
 const ACTIVITY_TYPES = ["sightseeing", "dining", "relaxation", "adventure"];
 
-// Validation function (basic email check)
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
@@ -109,9 +112,19 @@ const ItineraryPlanner = () => {
   const [viewItineraryIndex, setViewItineraryIndex] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [plansForSelectedDate, setPlansForSelectedDate] = useState([]);
-  const [categoryFilter, setCategoryFilter] = useState(""); // Added Category Filter
-  const [filterAnchorEl, setFilterAnchorEl] = useState(null); //Anchor for Category Filter
-  const isFilterMenuOpen = Boolean(filterAnchorEl); // Open for Category Filter
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
+  const isFilterMenuOpen = Boolean(filterAnchorEl);
+  const [loading, setLoading] = useState(false); // Loading state
+
+  // Simulate data loading
+  useEffect(() => {
+    setLoading(true);
+    // Replace this with your actual data loading logic
+    setTimeout(() => {
+      setLoading(false);
+    }, 500); // Simulate 0.5-second delay
+  }, []);
 
   useEffect(() => {
     if (selectedDate) {
@@ -120,7 +133,7 @@ const ItineraryPlanner = () => {
         (itinerary) =>
           moment(itinerary.startDate).format("YYYY-MM-DD") <= formattedDate &&
           moment(itinerary.endDate).format("YYYY-MM-DD") >= formattedDate &&
-          (categoryFilter === "" || itinerary.category === categoryFilter) // Apply Category Filter
+          (categoryFilter === "" || itinerary.category === categoryFilter)
       );
       setPlansForSelectedDate(plans);
     } else {
@@ -367,7 +380,7 @@ const ItineraryPlanner = () => {
   const handleDateSelect = (date) => {
     setSelectedDate(date);
   };
-  // Filter Menu
+
   const handleFilterMenuOpen = (event) => {
     setFilterAnchorEl(event.currentTarget);
   };
@@ -376,7 +389,7 @@ const ItineraryPlanner = () => {
   };
   const handleCategoryFilterSelect = (category) => {
     setCategoryFilter(category);
-    handleFilterMenuClose();
+    // handleFilterMenuClose(); //removed this keep filter menu open until clear or check icon is not pressed
   };
 
   const eventStyleGetter = (event, start, end, isSelected) => {
@@ -400,21 +413,35 @@ const ItineraryPlanner = () => {
     end: new Date(itinerary.endDate),
   }));
 
-  //Print itinerary
   const handlePrint = () => {
     window.print();
   };
+
+  //Apply filter and clear fitler logic
+  const handleApplyFilter = () => {
+    handleFilterMenuClose();
+  };
+  const handleClearFilter = () => {
+    setCategoryFilter("");
+    handleFilterMenuClose();
+  };
+
   const filteredItineraries = itineraries.filter(
     (itinerary) =>
       categoryFilter === "" || itinerary.category === categoryFilter
   );
 
   return (
-    <div>
+    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Navbar />
-      <div
-        className="p-6 bg-gray-100 min-h-screen "
-        style={{ fontFamily: "Arial, sans-serif" }}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          bgcolor: "gray.100",
+          fontFamily: "Arial, sans-serif",
+        }}
       >
         <Grid container spacing={3} className="max-w-7xl mx-auto">
           <Grid item xs={12}>
@@ -423,37 +450,37 @@ const ItineraryPlanner = () => {
               justifyContent="space-between"
               alignItems="center"
               mb={3}
+              flexDirection={{ xs: "column", sm: "row" }}
             >
               <Typography
                 variant="h4"
                 component="h1"
-                style={{ fontWeight: "bold" }}
+                mb={2}
+                sx={{ fontWeight: "bold" }}
               >
                 Itinerary Planner
               </Typography>
-              <Box display="flex" gap={2}>
+              <Box display="flex" gap={1}>
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
                   onClick={() => setOpenModal(true)}
-                  style={{ backgroundColor: "#2E7D32", color: "white" }} // Forest Green
+                  sx={{ bgcolor: "#2E7D32", color: "white" }}
                 >
-                  New Itinerary
+                  New
                 </Button>
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
-                  style={{ color: "#1976D2", borderColor: "#1976D2" }}
+                  sx={{ color: "#1976D2", borderColor: "#1976D2" }}
                 >
-                  Download Plans
+                  Download
                 </Button>
-                {/* Print button */}
                 <Tooltip title="Print Itinerary">
                   <IconButton aria-label="print" onClick={handlePrint}>
                     <PrintIcon />
                   </IconButton>
                 </Tooltip>
-                {/* Category Filter button */}
                 <Tooltip title="Filter by Category">
                   <IconButton
                     aria-label="filter"
@@ -464,23 +491,27 @@ const ItineraryPlanner = () => {
                     <FilterListIcon />
                   </IconButton>
                 </Tooltip>
+                {/*Filter menu*/}
                 <Menu
                   id="filter-menu"
                   anchorEl={filterAnchorEl}
                   open={isFilterMenuOpen}
                   onClose={handleFilterMenuClose}
+                  anchorOrigin={{
+                    vertical: "bottom",
+                    horizontal: "right",
+                  }}
+                  transformOrigin={{
+                    vertical: "top",
+                    horizontal: "right",
+                  }}
                 >
                   <MenuList>
-                    <MenuItem onClick={() => handleCategoryFilterSelect("")}>
-                      <ListItemIcon>
-                        <LabelIcon />
-                      </ListItemIcon>
-                      All Categories
-                    </MenuItem>
                     {CATEGORIES.map((category) => (
                       <MenuItem
                         key={category}
                         onClick={() => handleCategoryFilterSelect(category)}
+                        selected={category === categoryFilter}
                       >
                         <ListItemIcon>
                           <LabelIcon />
@@ -489,167 +520,206 @@ const ItineraryPlanner = () => {
                       </MenuItem>
                     ))}
                   </MenuList>
+                  <Divider />
+                  <Box
+                    sx={{
+                      p: 1,
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<ClearIcon />}
+                      onClick={handleClearFilter}
+                      size="small"
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<CheckIcon />}
+                      onClick={handleApplyFilter}
+                      size="small"
+                    >
+                      Apply
+                    </Button>
+                  </Box>
                 </Menu>
               </Box>
             </Box>
           </Grid>
 
-          <Grid item xs={8}>
-            {selectedDate && (
-              <Card elevation={3} style={{ marginBottom: "20px" }}>
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    style={{ color: "#2E7D32", fontWeight: "bold" }}
-                  >
-                    Plans for {moment(selectedDate).format("MMMM DD, YYYY")}
-                  </Typography>
-                  {plansForSelectedDate.length > 0 ? (
-                    plansForSelectedDate.map((plan) => (
-                      <Card
-                        key={plan.title}
-                        elevation={2}
-                        style={{ marginBottom: "10px" }}
+          {loading ? ( // Conditionally render loading indicator
+            <Grid
+              item
+              xs={12}
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <CircularProgress />
+            </Grid>
+          ) : (
+            <>
+              <Grid item xs={12} md={8}>
+                {selectedDate && (
+                  <Card elevation={3} sx={{ mb: 2 }}>
+                    <CardContent>
+                      <Typography
+                        variant="h6"
+                        sx={{ color: "#2E7D32", fontWeight: "bold" }}
                       >
-                        <CardContent>
-                          <Typography
-                            variant="subtitle1"
-                            style={{ fontWeight: "bold" }}
-                          >
-                            {plan.title}
-                          </Typography>
-                          <Typography variant="body2">
-                            Location: {plan.location}
-                          </Typography>
-                          <Typography variant="body2">
-                            {moment(plan.startDate).format("LL")} -{" "}
-                            {moment(plan.endDate).format("LL")}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            style={{ fontStyle: "italic" }}
-                          >
-                            Category: {plan.category}
-                          </Typography>
-                          {/* Display other relevant details here */}
-                        </CardContent>
-                      </Card>
-                    ))
-                  ) : (
-                    <Typography variant="body1">
-                      No plans for this date.
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="itineraries">
-                {(provided) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className="space-y-4"
-                  >
-                    {filteredItineraries.map((itinerary, index) => (
-                      <Draggable
-                        key={`${itinerary.title}-${index}`}
-                        draggableId={`${itinerary.title}-${index}`}
-                        index={index}
-                      >
-                        {(provided) => (
-                          <Card
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            elevation={3}
-                          >
-                            <CardContent
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
-                              <div>
-                                <Typography
-                                  variant="h6"
-                                  component="h2"
-                                  style={{ fontWeight: "bold" }}
-                                >
-                                  {itinerary.title}
-                                </Typography>
-                                <Typography
-                                  variant="subtitle2"
-                                  color="textSecondary"
-                                >
-                                  {moment(itinerary.startDate).format("LL")} -{" "}
-                                  {moment(itinerary.endDate).format("LL")}
-                                </Typography>
-                              </div>
-                              <Box display="flex">
-                                <Tooltip title="View Details">
-                                  <IconButton
-                                    color="primary"
-                                    onClick={() => handleViewItinerary(index)}
-                                  >
-                                    <VisibilityIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Edit Itinerary">
-                                  <IconButton
-                                    color="primary"
-                                    onClick={() => handleEditItinerary(index)}
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Delete Itinerary">
-                                  <IconButton
-                                    color="error"
-                                    onClick={() => handleDeleteItinerary(index)}
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
+                        Plans for {moment(selectedDate).format("MMMM DD, YYYY")}
+                      </Typography>
+                      {plansForSelectedDate.length > 0 ? (
+                        plansForSelectedDate.map((plan) => (
+                          <Card key={plan.title} elevation={2} sx={{ mb: 1 }}>
+                            <CardContent>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{ fontWeight: "bold" }}
+                              >
+                                {plan.title}
+                              </Typography>
+                              <Typography variant="body2">
+                                Location: {plan.location}
+                              </Typography>
+                              <Typography variant="body2">
+                                {moment(plan.startDate).format("LL")} -{" "}
+                                {moment(plan.endDate).format("LL")}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontStyle: "italic" }}
+                              >
+                                Category: {plan.category}
+                              </Typography>
                             </CardContent>
                           </Card>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
+                        ))
+                      ) : (
+                        <Typography variant="body1">
+                          No plans for this date.
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
                 )}
-              </Droppable>
-            </DragDropContext>
-          </Grid>
+                <DragDropContext onDragEnd={handleDragEnd}>
+                  <Droppable droppableId="itineraries">
+                    {(provided) => (
+                      <Box
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        sx={{ display: "grid", gap: 2 }}
+                      >
+                        {filteredItineraries.map((itinerary, index) => (
+                          <Draggable
+                            key={`${itinerary.title}-${index}`}
+                            draggableId={`${itinerary.title}-${index}`}
+                            index={index}
+                          >
+                            {(provided) => (
+                              <Card
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                elevation={3}
+                              >
+                                <CardContent
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography
+                                      variant="h6"
+                                      component="h2"
+                                      sx={{ fontWeight: "bold" }}
+                                    >
+                                      {itinerary.title}
+                                    </Typography>
+                                    <Typography
+                                      variant="subtitle2"
+                                      color="textSecondary"
+                                    >
+                                      {moment(itinerary.startDate).format("LL")}{" "}
+                                      - {moment(itinerary.endDate).format("LL")}
+                                    </Typography>
+                                  </Box>
+                                  <Box display="flex">
+                                    <Tooltip title="View Details">
+                                      <IconButton
+                                        color="primary"
+                                        onClick={() =>
+                                          handleViewItinerary(index)
+                                        }
+                                      >
+                                        <VisibilityIcon />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Edit Itinerary">
+                                      <IconButton
+                                        color="primary"
+                                        onClick={() =>
+                                          handleEditItinerary(index)
+                                        }
+                                      >
+                                        <EditIcon />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete Itinerary">
+                                      <IconButton
+                                        color="error"
+                                        onClick={() =>
+                                          handleDeleteItinerary(index)
+                                        }
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </CardContent>
+                              </Card>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </Box>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              </Grid>
 
-          <Grid item xs={4}>
-            <Card elevation={3}>
-              <CardContent>
-                <Typography
-                  variant="h6"
-                  component="h3"
-                  style={{ fontWeight: "bold", marginBottom: "10px" }}
-                >
-                  Calendar
-                </Typography>
-                <Calendar
-                  localizer={localizer}
-                  events={events}
-                  startAccessor="start"
-                  endAccessor="end"
-                  style={{ height: 500 }}
-                  onSelectSlot={({ start }) => handleDateSelect(start)}
-                  selectable={true}
-                  eventPropGetter={eventStyleGetter}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
+              <Grid item xs={12} md={4}>
+                <Card elevation={3}>
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      sx={{ fontWeight: "bold", mb: 1 }}
+                    >
+                      Calendar
+                    </Typography>
+                    <Calendar
+                      localizer={localizer}
+                      events={events}
+                      startAccessor="start"
+                      endAccessor="end"
+                      style={{ height: 500 }}
+                      onSelectSlot={({ start }) => handleDateSelect(start)}
+                      selectable={true}
+                      eventPropGetter={eventStyleGetter}
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          )}
 
-          {/* View Itinerary Dialog */}
           <Dialog
             open={viewItineraryIndex !== null}
             onClose={handleCloseViewItinerary}
@@ -660,10 +730,7 @@ const ItineraryPlanner = () => {
             <DialogContent>
               {viewItineraryIndex !== null && (
                 <>
-                  <Typography
-                    variant="h5"
-                    style={{ fontWeight: "bold", marginBottom: "10px" }}
-                  >
+                  <Typography variant="h5" sx={{ fontWeight: "bold", mb: 1 }}>
                     {itineraries[viewItineraryIndex].title}
                   </Typography>
                   <Typography variant="subtitle1">
@@ -675,26 +742,19 @@ const ItineraryPlanner = () => {
                       "LL"
                     )}
                   </Typography>
-                  <Typography variant="body1" style={{ marginTop: "10px" }}>
+                  <Typography variant="body1" sx={{ mt: 1 }}>
                     {itineraries[viewItineraryIndex].description}
                   </Typography>
-                  <Typography
-                    variant="h6"
-                    style={{ marginTop: "20px", fontWeight: "bold" }}
-                  >
+                  <Typography variant="h6" sx={{ mt: 2, fontWeight: "bold" }}>
                     Activities
                   </Typography>
                   {itineraries[viewItineraryIndex].activities.map(
                     (activity, index) => (
-                      <Card
-                        key={index}
-                        elevation={2}
-                        style={{ marginBottom: "10px" }}
-                      >
+                      <Card key={index} elevation={2} sx={{ mb: 1 }}>
                         <CardContent>
                           <Typography
                             variant="subtitle2"
-                            style={{ fontWeight: "bold" }}
+                            sx={{ fontWeight: "bold" }}
                           >
                             {activity.title}
                           </Typography>
@@ -705,7 +765,6 @@ const ItineraryPlanner = () => {
                       </Card>
                     )
                   )}
-                  {/* Display other details as needed (Expenses, Reminders, etc.) */}
                 </>
               )}
             </DialogContent>
@@ -716,16 +775,24 @@ const ItineraryPlanner = () => {
             </DialogActions>
           </Dialog>
 
-          {/* Itinerary Modal */}
-          <Dialog open={openModal} onClose={resetModal} maxWidth="lg" fullWidth>
+          <Dialog
+            open={openModal}
+            onClose={resetModal}
+            maxWidth="lg"
+            fullWidth
+            scroll="paper"
+          >
             <DialogTitle>
               {editIndex !== null ? "Edit Itinerary" : "Create New Itinerary"}
             </DialogTitle>
-            <DialogContent>
+            <DialogContent dividers>
               <Tabs
                 value={activeTab}
                 onChange={(e, newValue) => setActiveTab(newValue)}
-                className="mb-4"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{ mb: 2 }}
                 indicatorColor="primary"
                 textColor="primary"
               >
@@ -738,7 +805,7 @@ const ItineraryPlanner = () => {
 
               <TabPanel value={activeTab} index={0}>
                 <Grid container spacing={3}>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       required
                       label="Title"
@@ -750,12 +817,11 @@ const ItineraryPlanner = () => {
                           title: e.target.value,
                         }))
                       }
-                      margin="normal"
                       error={!!formErrors.title}
                       helperText={formErrors.title}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       label="Description"
                       fullWidth
@@ -768,10 +834,9 @@ const ItineraryPlanner = () => {
                           description: e.target.value,
                         }))
                       }
-                      margin="normal"
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       label="Start Date"
                       type="date"
@@ -784,12 +849,11 @@ const ItineraryPlanner = () => {
                           startDate: e.target.value,
                         }))
                       }
-                      margin="normal"
                       error={!!formErrors.startDate}
                       helperText={formErrors.startDate}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       label="End Date"
                       type="date"
@@ -802,12 +866,11 @@ const ItineraryPlanner = () => {
                           endDate: e.target.value,
                         }))
                       }
-                      margin="normal"
                       error={!!formErrors.endDate}
                       helperText={formErrors.endDate}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       label="Budget"
                       type="number"
@@ -819,13 +882,12 @@ const ItineraryPlanner = () => {
                           budget: e.target.value,
                         }))
                       }
-                      margin="normal"
                       error={!!formErrors.budget}
                       helperText={formErrors.budget}
                     />
                   </Grid>
-                  <Grid item xs={6}>
-                    <FormControl fullWidth margin="normal">
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
                       <InputLabel id="transportation-label">
                         Transportation
                       </InputLabel>
@@ -849,7 +911,6 @@ const ItineraryPlanner = () => {
                     </FormControl>
                   </Grid>
 
-                  {/* Custom Fields Section */}
                   <Grid item xs={12}>
                     <Box
                       display="flex"
@@ -870,7 +931,13 @@ const ItineraryPlanner = () => {
                       </Button>
                     </Box>
                     {currentItinerary.customFields.map((field, index) => (
-                      <Box key={index} display="flex" gap={2} mb={2}>
+                      <Box
+                        key={index}
+                        display="flex"
+                        gap={2}
+                        mb={2}
+                        alignItems="center"
+                      >
                         <TextField
                           label="Field Label"
                           value={field.label}
@@ -881,7 +948,7 @@ const ItineraryPlanner = () => {
                               e.target.value
                             )
                           }
-                          fullWidth
+                          sx={{ flexGrow: 1 }}
                         />
                         <TextField
                           label="Field Value"
@@ -893,7 +960,7 @@ const ItineraryPlanner = () => {
                               e.target.value
                             )
                           }
-                          fullWidth
+                          sx={{ flexGrow: 1 }}
                         />
                         <IconButton
                           color="error"
@@ -905,7 +972,7 @@ const ItineraryPlanner = () => {
                     ))}
                   </Grid>
 
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       required
                       label="Location"
@@ -921,7 +988,7 @@ const ItineraryPlanner = () => {
                       helperText={formErrors.location}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
                       <InputLabel>Category</InputLabel>
                       <Select
@@ -950,7 +1017,7 @@ const ItineraryPlanner = () => {
                   variant="outlined"
                   startIcon={<AddIcon />}
                   onClick={handleAddActivity}
-                  className="mb-4"
+                  sx={{ mb: 2 }}
                 >
                   Add Activity
                 </Button>
@@ -961,7 +1028,11 @@ const ItineraryPlanner = () => {
                 >
                   <Droppable droppableId="activities">
                     {(provided) => (
-                      <div {...provided.droppableProps} ref={provided.innerRef}>
+                      <Box
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        sx={{ display: "grid", gap: 2 }}
+                      >
                         {currentItinerary.activities.map((activity, index) => (
                           <Draggable
                             key={index}
@@ -974,13 +1045,10 @@ const ItineraryPlanner = () => {
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                                 elevation={2}
-                                style={{
-                                  marginBottom: "10px",
-                                  padding: "10px",
-                                }} // Added padding
+                                sx={{ p: 2 }}
                               >
                                 <Grid container spacing={2}>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <TextField
                                       label="Activity Title"
                                       fullWidth
@@ -995,7 +1063,7 @@ const ItineraryPlanner = () => {
                                       }
                                     />
                                   </Grid>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <TextField
                                       label="Location"
                                       fullWidth
@@ -1010,7 +1078,7 @@ const ItineraryPlanner = () => {
                                       }
                                     />
                                   </Grid>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <TextField
                                       label="Time"
                                       type="time"
@@ -1027,7 +1095,7 @@ const ItineraryPlanner = () => {
                                       }
                                     />
                                   </Grid>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <FormControl fullWidth>
                                       <InputLabel>Type</InputLabel>
                                       <Select
@@ -1050,7 +1118,7 @@ const ItineraryPlanner = () => {
                                       </Select>
                                     </FormControl>
                                   </Grid>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <TextField
                                       label="Cost"
                                       type="number"
@@ -1066,7 +1134,7 @@ const ItineraryPlanner = () => {
                                       }
                                     />
                                   </Grid>
-                                  <Grid item xs={6}>
+                                  <Grid item xs={12} sm={6}>
                                     <TextField
                                       label="Notes"
                                       fullWidth
@@ -1086,7 +1154,7 @@ const ItineraryPlanner = () => {
                                   <Grid
                                     item
                                     xs={12}
-                                    style={{ textAlign: "right" }}
+                                    sx={{ textAlign: "right" }}
                                   >
                                     <IconButton
                                       color="error"
@@ -1103,7 +1171,7 @@ const ItineraryPlanner = () => {
                           </Draggable>
                         ))}
                         {provided.placeholder}
-                      </div>
+                      </Box>
                     )}
                   </Droppable>
                 </DragDropContext>
@@ -1115,12 +1183,12 @@ const ItineraryPlanner = () => {
                     <Typography
                       variant="h6"
                       component="h4"
-                      style={{ fontWeight: "bold", marginBottom: "10px" }}
+                      sx={{ fontWeight: "bold", mb: 1 }}
                     >
                       Budget Overview
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       label="Total Budget"
                       type="number"
@@ -1132,13 +1200,13 @@ const ItineraryPlanner = () => {
                           budget: e.target.value,
                         }))
                       }
-                      margin="normal"
                     />
                   </Grid>
                   <Grid
                     item
-                    xs={6}
-                    style={{ display: "flex", alignItems: "center" }}
+                    xs={12}
+                    sm={6}
+                    sx={{ display: "flex", alignItems: "center" }}
                   >
                     <Typography variant="body1">
                       Remaining: ${calculateRemaining()}
@@ -1150,7 +1218,7 @@ const ItineraryPlanner = () => {
                       variant="outlined"
                       startIcon={<AddIcon />}
                       onClick={handleAddExpense}
-                      className="mb-4"
+                      sx={{ mb: 2 }}
                     >
                       Add Expense
                     </Button>
@@ -1163,9 +1231,10 @@ const ItineraryPlanner = () => {
                     >
                       <Droppable droppableId="expenses">
                         {(provided) => (
-                          <div
+                          <Box
                             {...provided.droppableProps}
                             ref={provided.innerRef}
+                            sx={{ display: "grid", gap: 2 }}
                           >
                             {currentItinerary.expenses.map((expense, index) => (
                               <Draggable
@@ -1179,13 +1248,10 @@ const ItineraryPlanner = () => {
                                     {...provided.draggableProps}
                                     {...provided.dragHandleProps}
                                     elevation={2}
-                                    style={{
-                                      marginBottom: "10px",
-                                      padding: "10px",
-                                    }} // Added padding
+                                    sx={{ p: 2 }}
                                   >
                                     <Grid container spacing={2}>
-                                      <Grid item xs={6}>
+                                      <Grid item xs={12} sm={6}>
                                         <TextField
                                           label="Item"
                                           fullWidth
@@ -1200,7 +1266,7 @@ const ItineraryPlanner = () => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={6}>
+                                      <Grid item xs={12} sm={6}>
                                         <TextField
                                           label="Amount"
                                           type="number"
@@ -1216,7 +1282,7 @@ const ItineraryPlanner = () => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={6}>
+                                      <Grid item xs={12} sm={6}>
                                         <FormControl fullWidth>
                                           <InputLabel>Category</InputLabel>
                                           <Select
@@ -1244,7 +1310,7 @@ const ItineraryPlanner = () => {
                                           </Select>
                                         </FormControl>
                                       </Grid>
-                                      <Grid item xs={6}>
+                                      <Grid item xs={12} sm={6}>
                                         <TextField
                                           label="Date"
                                           type="date"
@@ -1264,7 +1330,7 @@ const ItineraryPlanner = () => {
                                       <Grid
                                         item
                                         xs={12}
-                                        style={{ textAlign: "right" }}
+                                        sx={{ textAlign: "right" }}
                                       >
                                         <IconButton
                                           color="error"
@@ -1281,7 +1347,7 @@ const ItineraryPlanner = () => {
                               </Draggable>
                             ))}
                             {provided.placeholder}
-                          </div>
+                          </Box>
                         )}
                       </Droppable>
                     </DragDropContext>
@@ -1296,7 +1362,7 @@ const ItineraryPlanner = () => {
                       variant="outlined"
                       startIcon={<AddIcon />}
                       onClick={handleAddReminder}
-                      className="mb-4"
+                      sx={{ mb: 2 }}
                     >
                       Add Reminder
                     </Button>
@@ -1309,9 +1375,10 @@ const ItineraryPlanner = () => {
                     >
                       <Droppable droppableId="reminders">
                         {(provided) => (
-                          <div
+                          <Box
                             {...provided.droppableProps}
                             ref={provided.innerRef}
+                            sx={{ display: "grid", gap: 2 }}
                           >
                             {currentItinerary.reminders.map(
                               (reminder, index) => (
@@ -1326,13 +1393,10 @@ const ItineraryPlanner = () => {
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
                                       elevation={2}
-                                      style={{
-                                        marginBottom: "10px",
-                                        padding: "10px",
-                                      }} // Added padding
+                                      sx={{ p: 2 }}
                                     >
                                       <Grid container spacing={2}>
-                                        <Grid item xs={6}>
+                                        <Grid item xs={12} sm={6}>
                                           <TextField
                                             label="Reminder Title"
                                             fullWidth
@@ -1347,7 +1411,7 @@ const ItineraryPlanner = () => {
                                             }
                                           />
                                         </Grid>
-                                        <Grid item xs={6}>
+                                        <Grid item xs={12} sm={6}>
                                           <FormControl fullWidth>
                                             <InputLabel>Type</InputLabel>
                                             <Select
@@ -1373,7 +1437,7 @@ const ItineraryPlanner = () => {
                                             </Select>
                                           </FormControl>
                                         </Grid>
-                                        <Grid item xs={6}>
+                                        <Grid item xs={12} sm={6}>
                                           <TextField
                                             label="Date"
                                             type="date"
@@ -1390,7 +1454,7 @@ const ItineraryPlanner = () => {
                                             }
                                           />
                                         </Grid>
-                                        <Grid item xs={6}>
+                                        <Grid item xs={12} sm={6}>
                                           <TextField
                                             label="Time"
                                             type="time"
@@ -1410,7 +1474,7 @@ const ItineraryPlanner = () => {
                                         <Grid
                                           item
                                           xs={12}
-                                          style={{ textAlign: "right" }}
+                                          sx={{ textAlign: "right" }}
                                         >
                                           <IconButton
                                             color="error"
@@ -1431,7 +1495,7 @@ const ItineraryPlanner = () => {
                               )
                             )}
                             {provided.placeholder}
-                          </div>
+                          </Box>
                         )}
                       </Droppable>
                     </DragDropContext>
@@ -1460,7 +1524,7 @@ const ItineraryPlanner = () => {
 
                   {currentItinerary.isCollaborative && (
                     <>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <TextField
                           label="Add Collaborator Email"
                           fullWidth
@@ -1471,7 +1535,7 @@ const ItineraryPlanner = () => {
                           }
                         />
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid item xs={12} sm={6}>
                         <Button
                           variant="contained"
                           startIcon={<ShareIcon />}
@@ -1485,10 +1549,7 @@ const ItineraryPlanner = () => {
 
                   {currentItinerary.collaborators.length > 0 && (
                     <Grid item xs={12}>
-                      <Typography
-                        variant="subtitle1"
-                        style={{ marginBottom: "10px" }}
-                      >
+                      <Typography variant="subtitle1" sx={{ mb: 1 }}>
                         Current Collaborators
                       </Typography>
                       <Box display="flex" flexWrap="wrap" gap={1}>
@@ -1526,9 +1587,9 @@ const ItineraryPlanner = () => {
             </DialogActions>
           </Dialog>
         </Grid>
-      </div>
+      </Box>
       <Footer />
-    </div>
+    </Box>
   );
 };
 
