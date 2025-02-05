@@ -21,7 +21,7 @@ const Login = () => {
     <div className="bg-gradient-to-r from-indigo-50 to-blue-100 min-h-screen flex flex-col"> {/* Gradient background, full screen height, flex column for footer */}
       <LandingPageNavbar />
 
-      <div className="flex-grow flex items-center justify-center"> {/* Center content vertically and take up available space */}
+      <div className="flex-grow flex items-center justify-center h-screen"> {/* Center content vertically and take up available space */}
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md"> {/* Responsive width, more padding */}
           <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Login to Continue</h1> {/* Larger, darker heading */}
 
