@@ -3,6 +3,9 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import ItineraryList from "./pages/ItineraryList";
+import Contact from "./pages/Contact";
+import About from "./pages/About";
 
 function App() {
   return (
@@ -18,6 +21,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/itineraries"
+          element={
+            <ProtectedRoute>
+              <ItineraryList />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/about" element={<About/>} />
+        <Route path="/contact" element={<Contact/>} />
       </Routes>
     </Router>
   );
