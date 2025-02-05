@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { auth } from "../firebase/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
+import LandingPageNavbar from "../components/LandingPageNavbar";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,7 +17,12 @@ const Login = () => {
   }, [navigate]);
 
   return (
+    <div>
+            <LandingPageNavbar />
+
+  
     <div className="flex items-center justify-center h-screen bg-gray-100">
+
       <div className="bg-white p-6 rounded-lg shadow-lg text-center">
         <h1 className="text-2xl font-bold mb-4">Login to Continue</h1>
         <button
@@ -26,6 +32,7 @@ const Login = () => {
           Sign in with Google
         </button>
       </div>
+    </div>
     </div>
   );
 };
