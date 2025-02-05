@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import PropTypes from "prop-types";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -13,7 +13,7 @@ import {
   Label as LabelIcon,
   Share as ShareIcon,
   Download as DownloadIcon,
-  Visibility as VisibilityIcon, // Import the visibility icon
+  Visibility as VisibilityIcon,
 } from "@mui/icons-material";
 import {
   TextField,
@@ -36,6 +36,12 @@ import {
   Typography,
   FormHelperText,
 } from "@mui/material";
+
+import { Calendar, momentLocalizer } from "react-big-calendar";
+import moment from "moment";
+import "react-big-calendar/lib/css/react-big-calendar.css";
+
+const localizer = momentLocalizer(moment);
 
 const TabPanel = ({ children, value, index }) => (
   <div hidden={value !== index}>
@@ -91,7 +97,23 @@ const ItineraryPlanner = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [newCollaboratorEmail, setNewCollaboratorEmail] = useState("");
   const [formErrors, setFormErrors] = useState({}); // State for form errors
-  const [viewItineraryIndex, setViewItineraryIndex] = useState(null); // new state for viewing itinerary
+  const [viewItineraryIndex, setViewItineraryIndex] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [plansForSelectedDate, setPlansForSelectedDate] = useState([]);
+
+  useEffect(() => {
+    if (selectedDate) {
+      const formattedDate = moment(selectedDate).format("YYYY-MM-DD");
+      const plans = itineraries.filter(
+        (itinerary) =>
+          moment(itinerary.startDate).format("YYYY-MM-DD") <= formattedDate &&
+          moment(itinerary.endDate).format("YYYY-MM-DD") >= formattedDate
+      );
+      setPlansForSelectedDate(plans);
+    } else {
+      setPlansForSelectedDate([]);
+    }
+  }, [selectedDate, itineraries]);
 
   const handleAddItinerary = () => {
     const errors = validateForm(currentItinerary);
@@ -124,10 +146,17 @@ const ItineraryPlanner = () => {
     if (!itinerary.endDate) {
       errors.endDate = "End Date is required";
     }
-    if (itinerary.startDate && itinerary.endDate && itinerary.startDate > itinerary.endDate) {
+    if (
+      itinerary.startDate &&
+      itinerary.endDate &&
+      itinerary.startDate > itinerary.endDate
+    ) {
       errors.endDate = "End Date must be after Start Date";
     }
-    if (isNaN(parseFloat(itinerary.budget)) || parseFloat(itinerary.budget) <= 0) {
+    if (
+      isNaN(parseFloat(itinerary.budget)) ||
+      parseFloat(itinerary.budget) <= 0
+    ) {
       errors.budget = "Budget must be a positive number";
     }
 
@@ -196,12 +225,20 @@ const ItineraryPlanner = () => {
       i === index ? { ...item, [field]: value } : item
     );
 
-    setCurrentItinerary((prev) => ({ ...prev, customFields: updatedCustomFields }));
+    setCurrentItinerary((prev) => ({
+      ...prev,
+      customFields: updatedCustomFields,
+    }));
   };
 
   const removeCustomField = (index) => {
-    const updatedCustomFields = currentItinerary.customFields.filter((_, i) => i !== index);
-    setCurrentItinerary((prev) => ({ ...prev, customFields: updatedCustomFields }));
+    const updatedCustomFields = currentItinerary.customFields.filter(
+      (_, i) => i !== index
+    );
+    setCurrentItinerary((prev) => ({
+      ...prev,
+      customFields: updatedCustomFields,
+    }));
   };
 
   const handleDragEnd = (result) => {
@@ -227,7 +264,14 @@ const ItineraryPlanner = () => {
       ...prev,
       activities: [
         ...prev.activities,
-        { title: "", time: "", type: "sightseeing", cost: "", notes: "", location: "" },
+        {
+          title: "",
+          time: "",
+          type: "sightseeing",
+          cost: "",
+          notes: "",
+          location: "",
+        },
       ],
     }));
   };
@@ -235,14 +279,20 @@ const ItineraryPlanner = () => {
   const handleAddExpense = () => {
     setCurrentItinerary((prev) => ({
       ...prev,
-      expenses: [...prev.expenses, { item: "", amount: "", category: "transportation", date: "" }],
+      expenses: [
+        ...prev.expenses,
+        { item: "", amount: "", category: "transportation", date: "" },
+      ],
     }));
   };
 
   const handleAddReminder = () => {
     setCurrentItinerary((prev) => ({
       ...prev,
-      reminders: [...prev.reminders, { title: "", date: "", time: "", type: "activity" }],
+      reminders: [
+        ...prev.reminders,
+        { title: "", date: "", time: "", type: "activity" },
+      ],
     }));
   };
 
@@ -254,13 +304,20 @@ const ItineraryPlanner = () => {
   };
 
   const handleAddCollaborator = () => {
-    if (newCollaboratorEmail && !currentItinerary.collaborators.includes(newCollaboratorEmail) && isValidEmail(newCollaboratorEmail)) {
+    if (
+      newCollaboratorEmail &&
+      !currentItinerary.collaborators.includes(newCollaboratorEmail) &&
+      isValidEmail(newCollaboratorEmail)
+    ) {
       setCurrentItinerary((prev) => ({
         ...prev,
         collaborators: [...prev.collaborators, newCollaboratorEmail],
       }));
       setNewCollaboratorEmail(""); // Clear the input
-    } else if (newCollaboratorEmail && currentItinerary.collaborators.includes(newCollaboratorEmail)) {
+    } else if (
+      newCollaboratorEmail &&
+      currentItinerary.collaborators.includes(newCollaboratorEmail)
+    ) {
       alert("Collaborator already added");
     } else if (newCollaboratorEmail && !isValidEmail(newCollaboratorEmail)) {
       alert("Please enter a valid email.");
@@ -268,8 +325,13 @@ const ItineraryPlanner = () => {
   };
 
   const handleRemoveCollaborator = (index) => {
-    const newCollaborators = currentItinerary.collaborators.filter((_, i) => i !== index);
-    setCurrentItinerary((prev) => ({ ...prev, collaborators: newCollaborators }));
+    const newCollaborators = currentItinerary.collaborators.filter(
+      (_, i) => i !== index
+    );
+    setCurrentItinerary((prev) => ({
+      ...prev,
+      collaborators: newCollaborators,
+    }));
   };
 
   // Drag and drop handlers for activity, expense, and reminder modal
@@ -294,85 +356,147 @@ const ItineraryPlanner = () => {
     setViewItineraryIndex(null);
   };
 
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+  };
+
+  const eventStyleGetter = (event, start, end, isSelected) => {
+    const backgroundColor = "#3174ad";
+    const style = {
+      backgroundColor: backgroundColor,
+      borderRadius: "5px",
+      opacity: 0.8,
+      color: "white",
+      border: "0px",
+      display: "block",
+    };
+    return {
+      style: style,
+    };
+  };
+  const events = itineraries.map((itinerary) => ({
+    title: itinerary.title,
+    start: new Date(itinerary.startDate),
+    end: new Date(itinerary.endDate),
+  }));
+
   return (
     <div>
       <Navbar />
       <div className="p-6 bg-gray-100 min-h-screen">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">Itinerary Planner</h1>
-            <div className="space-x-2 flex gap-2">
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenModal(true)}
-              >
-                New Itinerary
-              </Button>
-              <Button variant="outlined" startIcon={<DownloadIcon />}>
-                Download Plans
-              </Button>
+        <div className="max-w-7xl mx-auto grid grid-cols-3 gap-6">
+          <div className="col-span-2">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-3xl font-bold">Itinerary Planner</h1>
+              <div className="space-x-2 flex gap-2">
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenModal(true)}
+                >
+                  New Itinerary
+                </Button>
+                <Button variant="outlined" startIcon={<DownloadIcon />}>
+                  Download Plans
+                </Button>
+              </div>
+            </div>
+            {selectedDate && (
+              <div className="mb-4">
+                <Typography variant="h6">
+                  Plans for {moment(selectedDate).format("MMMM DD, YYYY")}
+                </Typography>
+                {plansForSelectedDate.length > 0 ? (
+                  plansForSelectedDate.map((plan) => (
+                    <div
+                      key={plan.title}
+                      className="bg-white shadow-md rounded-lg p-4 mb-2"
+                    >
+                      <Typography variant="subtitle1">{plan.title}</Typography>
+                      <Typography variant="body2">{plan.location}</Typography>
+                      {/* Display other relevant details */}
+                    </div>
+                  ))
+                ) : (
+                  <Typography variant="body1">
+                    No plans for this date.
+                  </Typography>
+                )}
+              </div>
+            )}
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="itineraries">
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="space-y-4"
+                  >
+                    {itineraries.map((itinerary, index) => (
+                      <Draggable
+                        key={`${itinerary.title}-${index}`}
+                        draggableId={`${itinerary.title}-${index}`}
+                        index={index}
+                      >
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="bg-white shadow-md rounded-lg p-4 flex justify-between items-center"
+                          >
+                            <div>
+                              <h2 className="text-xl font-semibold">
+                                {itinerary.title}
+                              </h2>
+                              <p className="text-gray-600">
+                                {itinerary.startDate} - {itinerary.endDate}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleViewItinerary(index)} // Open view dialog
+                              >
+                                <VisibilityIcon />
+                              </IconButton>
+                              <IconButton
+                                color="primary"
+                                onClick={() => handleEditItinerary(index)}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton
+                                color="error"
+                                onClick={() => handleDeleteItinerary(index)}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </div>
+          <div className="col-span-1">
+            <div className="bg-white shadow-md rounded-lg p-4">
+              <Calendar
+                localizer={localizer}
+                events={events}
+                startAccessor="start"
+                endAccessor="end"
+                style={{ height: 500 }}
+                onSelectSlot={({ start }) => handleDateSelect(start)}
+                selectable={true}
+                eventPropGetter={eventStyleGetter}
+              />
             </div>
           </div>
-
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="itineraries">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="space-y-4"
-                >
-                  {itineraries.map((itinerary, index) => (
-                    <Draggable
-                      key={`${itinerary.title}-${index}`}
-                      draggableId={`${itinerary.title}-${index}`}
-                      index={index}
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className="bg-white shadow-md rounded-lg p-4 flex justify-between items-center"
-                        >
-                          <div>
-                            <h2 className="text-xl font-semibold">
-                              {itinerary.title}
-                            </h2>
-                            <p className="text-gray-600">
-                              {itinerary.startDate} - {itinerary.endDate}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleViewItinerary(index)} // Open view dialog
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleEditItinerary(index)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton
-                              color="error"
-                              onClick={() => handleDeleteItinerary(index)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </div>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
 
           {/* View Itinerary Dialog */}
           <Dialog
@@ -389,20 +513,25 @@ const ItineraryPlanner = () => {
                     {itineraries[viewItineraryIndex].title}
                   </Typography>
                   <Typography variant="subtitle1">
-                    {itineraries[viewItineraryIndex].startDate} - {itineraries[viewItineraryIndex].endDate}
+                    {itineraries[viewItineraryIndex].startDate} -{" "}
+                    {itineraries[viewItineraryIndex].endDate}
                   </Typography>
                   <Typography variant="body1">
                     {itineraries[viewItineraryIndex].description}
                   </Typography>
                   <Typography variant="h6">Activities</Typography>
-                  {itineraries[viewItineraryIndex].activities.map((activity, index) => (
-                    <div key={index}>
-                      <Typography variant="subtitle2">{activity.title}</Typography>
-                      <Typography variant="body2">
-                        {activity.time} - {activity.location}
-                      </Typography>
-                    </div>
-                  ))}
+                  {itineraries[viewItineraryIndex].activities.map(
+                    (activity, index) => (
+                      <div key={index}>
+                        <Typography variant="subtitle2">
+                          {activity.title}
+                        </Typography>
+                        <Typography variant="body2">
+                          {activity.time} - {activity.location}
+                        </Typography>
+                      </div>
+                    )
+                  )}
                   {/* Display other details as needed (Expenses, Reminders, etc.) */}
                 </>
               )}
@@ -440,7 +569,10 @@ const ItineraryPlanner = () => {
                     fullWidth
                     value={currentItinerary.title}
                     onChange={(e) =>
-                      setCurrentItinerary((prev) => ({ ...prev, title: e.target.value }))
+                      setCurrentItinerary((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
                     }
                     margin="normal"
                     error={!!formErrors.title}
@@ -467,7 +599,10 @@ const ItineraryPlanner = () => {
                     InputLabelProps={{ shrink: true }}
                     value={currentItinerary.startDate}
                     onChange={(e) =>
-                      setCurrentItinerary((prev) => ({ ...prev, startDate: e.target.value }))
+                      setCurrentItinerary((prev) => ({
+                        ...prev,
+                        startDate: e.target.value,
+                      }))
                     }
                     margin="normal"
                     error={!!formErrors.startDate}
@@ -480,7 +615,10 @@ const ItineraryPlanner = () => {
                     InputLabelProps={{ shrink: true }}
                     value={currentItinerary.endDate}
                     onChange={(e) =>
-                      setCurrentItinerary((prev) => ({ ...prev, endDate: e.target.value }))
+                      setCurrentItinerary((prev) => ({
+                        ...prev,
+                        endDate: e.target.value,
+                      }))
                     }
                     margin="normal"
                     error={!!formErrors.endDate}
@@ -492,7 +630,10 @@ const ItineraryPlanner = () => {
                     fullWidth
                     value={currentItinerary.budget}
                     onChange={(e) =>
-                      setCurrentItinerary((prev) => ({ ...prev, budget: e.target.value }))
+                      setCurrentItinerary((prev) => ({
+                        ...prev,
+                        budget: e.target.value,
+                      }))
                     }
                     margin="normal"
                     error={!!formErrors.budget}
@@ -540,7 +681,11 @@ const ItineraryPlanner = () => {
                           label="Field Label"
                           value={field.label}
                           onChange={(e) =>
-                            handleCustomFieldChange(index, "label", e.target.value)
+                            handleCustomFieldChange(
+                              index,
+                              "label",
+                              e.target.value
+                            )
                           }
                           className="flex-grow"
                         />
@@ -548,7 +693,11 @@ const ItineraryPlanner = () => {
                           label="Field Value"
                           value={field.value}
                           onChange={(e) =>
-                            handleCustomFieldChange(index, "value", e.target.value)
+                            handleCustomFieldChange(
+                              index,
+                              "value",
+                              e.target.value
+                            )
                           }
                           className="flex-grow"
                         />
@@ -568,7 +717,10 @@ const ItineraryPlanner = () => {
                     fullWidth
                     value={currentItinerary.location}
                     onChange={(e) =>
-                      setCurrentItinerary((prev) => ({ ...prev, location: e.target.value }))
+                      setCurrentItinerary((prev) => ({
+                        ...prev,
+                        location: e.target.value,
+                      }))
                     }
                     error={!!formErrors.location}
                     helperText={formErrors.location}
@@ -579,7 +731,10 @@ const ItineraryPlanner = () => {
                       value={currentItinerary.category}
                       label="Category"
                       onChange={(e) =>
-                        setCurrentItinerary((prev) => ({ ...prev, category: e.target.value }))
+                        setCurrentItinerary((prev) => ({
+                          ...prev,
+                          category: e.target.value,
+                        }))
                       }
                     >
                       {CATEGORIES.map((category) => (
@@ -601,12 +756,20 @@ const ItineraryPlanner = () => {
                 >
                   Add Activity
                 </Button>
-                <DragDropContext onDragEnd={(result) => handleDragEndModal("activities", result)}>
+                <DragDropContext
+                  onDragEnd={(result) =>
+                    handleDragEndModal("activities", result)
+                  }
+                >
                   <Droppable droppableId="activities">
                     {(provided) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}>
                         {currentItinerary.activities.map((activity, index) => (
-                          <Draggable key={index} draggableId={`activity-${index}`} index={index}>
+                          <Draggable
+                            key={index}
+                            draggableId={`activity-${index}`}
+                            index={index}
+                          >
                             {(provided) => (
                               <div
                                 ref={provided.innerRef}
@@ -619,7 +782,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={activity.title}
                                   onChange={(e) =>
-                                    handleInputChange("activities", index, "title", e.target.value)
+                                    handleInputChange(
+                                      "activities",
+                                      index,
+                                      "title",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <TextField
@@ -627,7 +795,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={activity.location}
                                   onChange={(e) =>
-                                    handleInputChange("activities", index, "location", e.target.value)
+                                    handleInputChange(
+                                      "activities",
+                                      index,
+                                      "location",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <TextField
@@ -637,7 +810,12 @@ const ItineraryPlanner = () => {
                                   InputLabelProps={{ shrink: true }}
                                   value={activity.time}
                                   onChange={(e) =>
-                                    handleInputChange("activities", index, "time", e.target.value)
+                                    handleInputChange(
+                                      "activities",
+                                      index,
+                                      "time",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <FormControl fullWidth>
@@ -646,7 +824,12 @@ const ItineraryPlanner = () => {
                                     value={activity.type}
                                     label="Type"
                                     onChange={(e) =>
-                                      handleInputChange("activities", index, "type", e.target.value)
+                                      handleInputChange(
+                                        "activities",
+                                        index,
+                                        "type",
+                                        e.target.value
+                                      )
                                     }
                                   >
                                     {ACTIVITY_TYPES.map((type) => (
@@ -662,7 +845,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={activity.cost}
                                   onChange={(e) =>
-                                    handleInputChange("activities", index, "cost", e.target.value)
+                                    handleInputChange(
+                                      "activities",
+                                      index,
+                                      "cost",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <TextField
@@ -672,12 +860,19 @@ const ItineraryPlanner = () => {
                                   rows={2}
                                   value={activity.notes}
                                   onChange={(e) =>
-                                    handleInputChange("activities", index, "notes", e.target.value)
+                                    handleInputChange(
+                                      "activities",
+                                      index,
+                                      "notes",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <IconButton
                                   color="error"
-                                  onClick={() => handleDeleteItem("activities", index)}
+                                  onClick={() =>
+                                    handleDeleteItem("activities", index)
+                                  }
                                 >
                                   <DeleteIcon />
                                 </IconButton>
@@ -704,7 +899,10 @@ const ItineraryPlanner = () => {
                       fullWidth
                       value={currentItinerary.budget}
                       onChange={(e) =>
-                        setCurrentItinerary((prev) => ({ ...prev, budget: e.target.value }))
+                        setCurrentItinerary((prev) => ({
+                          ...prev,
+                          budget: e.target.value,
+                        }))
                       }
                     />
                     <Typography variant="body1" className="flex items-center">
@@ -721,12 +919,18 @@ const ItineraryPlanner = () => {
                 >
                   Add Expense
                 </Button>
-                <DragDropContext onDragEnd={(result) => handleDragEndModal("expenses", result)}>
+                <DragDropContext
+                  onDragEnd={(result) => handleDragEndModal("expenses", result)}
+                >
                   <Droppable droppableId="expenses">
                     {(provided) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}>
                         {currentItinerary.expenses.map((expense, index) => (
-                          <Draggable key={index} draggableId={`expense-${index}`} index={index}>
+                          <Draggable
+                            key={index}
+                            draggableId={`expense-${index}`}
+                            index={index}
+                          >
                             {(provided) => (
                               <div
                                 ref={provided.innerRef}
@@ -739,7 +943,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={expense.item}
                                   onChange={(e) =>
-                                    handleInputChange("expenses", index, "item", e.target.value)
+                                    handleInputChange(
+                                      "expenses",
+                                      index,
+                                      "item",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <TextField
@@ -748,7 +957,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={expense.amount}
                                   onChange={(e) =>
-                                    handleInputChange("expenses", index, "amount", e.target.value)
+                                    handleInputChange(
+                                      "expenses",
+                                      index,
+                                      "amount",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <FormControl fullWidth>
@@ -757,7 +971,12 @@ const ItineraryPlanner = () => {
                                     value={expense.category}
                                     label="Category"
                                     onChange={(e) =>
-                                      handleInputChange("expenses", index, "category", e.target.value)
+                                      handleInputChange(
+                                        "expenses",
+                                        index,
+                                        "category",
+                                        e.target.value
+                                      )
                                     }
                                   >
                                     {EXPENSE_CATEGORIES.map((category) => (
@@ -774,12 +993,19 @@ const ItineraryPlanner = () => {
                                   InputLabelProps={{ shrink: true }}
                                   value={expense.date}
                                   onChange={(e) =>
-                                    handleInputChange("expenses", index, "date", e.target.value)
+                                    handleInputChange(
+                                      "expenses",
+                                      index,
+                                      "date",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <IconButton
                                   color="error"
-                                  onClick={() => handleDeleteItem("expenses", index)}
+                                  onClick={() =>
+                                    handleDeleteItem("expenses", index)
+                                  }
                                 >
                                   <DeleteIcon />
                                 </IconButton>
@@ -804,12 +1030,20 @@ const ItineraryPlanner = () => {
                   Add Reminder
                 </Button>
 
-                <DragDropContext onDragEnd={(result) => handleDragEndModal("reminders", result)}>
+                <DragDropContext
+                  onDragEnd={(result) =>
+                    handleDragEndModal("reminders", result)
+                  }
+                >
                   <Droppable droppableId="reminders">
                     {(provided) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}>
                         {currentItinerary.reminders.map((reminder, index) => (
-                          <Draggable key={index} draggableId={`reminder-${index}`} index={index}>
+                          <Draggable
+                            key={index}
+                            draggableId={`reminder-${index}`}
+                            index={index}
+                          >
                             {(provided) => (
                               <div
                                 ref={provided.innerRef}
@@ -822,7 +1056,12 @@ const ItineraryPlanner = () => {
                                   fullWidth
                                   value={reminder.title}
                                   onChange={(e) =>
-                                    handleInputChange("reminders", index, "title", e.target.value)
+                                    handleInputChange(
+                                      "reminders",
+                                      index,
+                                      "title",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <FormControl fullWidth>
@@ -831,7 +1070,12 @@ const ItineraryPlanner = () => {
                                     value={reminder.type}
                                     label="Type"
                                     onChange={(e) =>
-                                      handleInputChange("reminders", index, "type", e.target.value)
+                                      handleInputChange(
+                                        "reminders",
+                                        index,
+                                        "type",
+                                        e.target.value
+                                      )
                                     }
                                   >
                                     {REMINDER_TYPES.map((type) => (
@@ -848,7 +1092,12 @@ const ItineraryPlanner = () => {
                                   InputLabelProps={{ shrink: true }}
                                   value={reminder.date}
                                   onChange={(e) =>
-                                    handleInputChange("reminders", index, "date", e.target.value)
+                                    handleInputChange(
+                                      "reminders",
+                                      index,
+                                      "date",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <TextField
@@ -858,12 +1107,19 @@ const ItineraryPlanner = () => {
                                   InputLabelProps={{ shrink: true }}
                                   value={reminder.time}
                                   onChange={(e) =>
-                                    handleInputChange("reminders", index, "time", e.target.value)
+                                    handleInputChange(
+                                      "reminders",
+                                      index,
+                                      "time",
+                                      e.target.value
+                                    )
                                   }
                                 />
                                 <IconButton
                                   color="error"
-                                  onClick={() => handleDeleteItem("reminders", index)}
+                                  onClick={() =>
+                                    handleDeleteItem("reminders", index)
+                                  }
                                 >
                                   <DeleteIcon />
                                 </IconButton>
@@ -902,9 +1158,15 @@ const ItineraryPlanner = () => {
                         fullWidth
                         placeholder="Enter email address"
                         value={newCollaboratorEmail}
-                        onChange={(e) => setNewCollaboratorEmail(e.target.value)}
+                        onChange={(e) =>
+                          setNewCollaboratorEmail(e.target.value)
+                        }
                       />
-                      <Button variant="contained" startIcon={<ShareIcon />} onClick={handleAddCollaborator}>
+                      <Button
+                        variant="contained"
+                        startIcon={<ShareIcon />}
+                        onClick={handleAddCollaborator}
+                      >
                         Add Collaborator
                       </Button>
                     </div>
@@ -916,13 +1178,15 @@ const ItineraryPlanner = () => {
                         Current Collaborators
                       </Typography>
                       <div className="flex flex-wrap gap-2">
-                        {currentItinerary.collaborators.map((collaborator, index) => (
-                          <Chip
-                            key={index}
-                            label={collaborator}
-                            onDelete={() => handleRemoveCollaborator(index)}
-                          />
-                        ))}
+                        {currentItinerary.collaborators.map(
+                          (collaborator, index) => (
+                            <Chip
+                              key={index}
+                              label={collaborator}
+                              onDelete={() => handleRemoveCollaborator(index)}
+                            />
+                          )
+                        )}
                       </div>
                     </div>
                   )}
