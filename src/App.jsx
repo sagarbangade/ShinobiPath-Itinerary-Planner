@@ -3,9 +3,9 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./routes/ProtectedRoute";
-import ItineraryList from "./pages/ItineraryList";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
+import ItineraryPlanner from "./pages/ItineraryPlanner";
 
 function App() {
   return (
@@ -25,7 +25,7 @@ function App() {
           path="/itineraries"
           element={
             <ProtectedRoute>
-              <ItineraryList />
+              <ItineraryPlanner />
             </ProtectedRoute>
           }
         />
