@@ -4,7 +4,14 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid md:grid-cols-4 gap-8">
           <div>
-            <h3 className="text-white font-bold text-lg mb-4">TravelPlanner</h3>
+            <div className="flex space-x-3 mb-4">
+              <img
+                src="/src/assets/Logo/logo.png"
+                alt="ShinobiPath Logo"
+                className="h-10 bg-[#13fa6f5f] p-1 rounded-3xl"
+              />
+              <h3 className="text-white font-bold text-3xl mb-4">ShinobiPath</h3>
+            </div>
             <p className="text-sm">
               Making travel planning simple and enjoyable for everyone.
             </p>
