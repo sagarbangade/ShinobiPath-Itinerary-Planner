@@ -418,7 +418,7 @@ const ItineraryPlanner = () => {
                     onClick={() => setOpenModal(true)}
                     sx={{ bgcolor: "#009689", color: "white" }}
                   >
-                    New 
+                    New
                   </Button>
                   <Button
                     variant="outlined"
