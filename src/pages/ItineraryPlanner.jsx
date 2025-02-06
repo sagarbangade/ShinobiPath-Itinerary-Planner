@@ -13,7 +13,6 @@ import {
   Share as ShareIcon,
   Download as DownloadIcon,
   Visibility as VisibilityIcon,
-  Print as PrintIcon,
   FilterList as FilterListIcon,
   Check as CheckIcon,
   Clear as ClearIcon,
@@ -367,7 +366,6 @@ const ItineraryPlanner = () => {
     start: new Date(itinerary.startDate),
     end: new Date(itinerary.endDate),
   }));
-  const handlePrint = () => window.print();
   const handleApplyFilter = () => handleFilterMenuClose();
   const handleClearFilter = () => {
     setCategoryFilter("");
@@ -408,6 +406,7 @@ const ItineraryPlanner = () => {
                   component="h1"
                   sx={{ fontWeight: "bold" }}
                   mb={2}
+                  
                 >
                   Itinerary Planner
                 </Typography>
@@ -416,22 +415,18 @@ const ItineraryPlanner = () => {
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={() => setOpenModal(true)}
-                    sx={{ bgcolor: "#009689", color: "white" }}
+                    sx={{ bgcolor: "#ff7723", color: "white" }}
                   >
                     New
                   </Button>
                   <Button
                     variant="outlined"
                     startIcon={<DownloadIcon />}
-                    sx={{ color: "#1976D2", borderColor: "#1976D2" }}
+                    sx={{ color: "#ff7723", borderColor: "#1976D2" }}
                   >
                     Download
                   </Button>
-                  <Tooltip title="Print Itinerary">
-                    <IconButton aria-label="print" onClick={handlePrint}>
-                      <PrintIcon />
-                    </IconButton>
-                  </Tooltip>
+
                   <Tooltip title="Filter by Category">
                     <IconButton
                       aria-label="filter"

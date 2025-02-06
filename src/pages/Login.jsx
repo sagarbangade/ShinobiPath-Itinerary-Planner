@@ -155,7 +155,7 @@ const Login = () => {
 
       <LandingPageNavbar />
 
-      <div className="flex-grow flex items-center justify-center">
+      <div className="flex-grow flex h-screen items-center justify-center">
         <div className="bg-black bg-opacity-70 p-8 rounded-3xl shadow-2xl w-full max-w-md backdrop-blur-md"> {/* Added backdrop-blur-md */}
           <h1 className="text-3xl font-bold mb-6 text-center gradient-text bg-gradient-to-r from-orange-500 via-yellow-400 to-orange-600">Login to Continue</h1>
           <p className="text-gray-400 mb-4 text-center">Sign in with your Google account to access the dashboard.</p>
