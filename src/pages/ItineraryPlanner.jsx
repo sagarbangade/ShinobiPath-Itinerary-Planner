@@ -1,7 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import PropTypes from "prop-types";
-import Navbar from "../components/Navbar"; // Assumed component
-import Footer from "../components/Footer"; // Assumed component
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import {
   Add as AddIcon,
@@ -51,6 +49,22 @@ import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
+//Firebase
+import {
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+} from "firebase/firestore";
+import { db, auth } from "../firebase/firebaseConfig"; // Import your Firebase config
+import { v4 as uuidv4 } from "uuid";
+// import ItineraryMap from "../components/ItineraryMap";
+import BudgetChart from "../components/BudgetChart";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+
 const localizer = momentLocalizer(moment);
 
 const TabPanel = ({ children, value, index }) => (
@@ -84,7 +98,7 @@ const isValidEmail = (email) => {
 };
 
 const ItineraryPlanner = () => {
-  const [itineraries, setItineraries] = useState([]);
+  const [userItineraries, setUserItineraries] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [currentItinerary, setCurrentItinerary] = useState({
     title: "",
@@ -92,21 +106,17 @@ const ItineraryPlanner = () => {
     startDate: "",
     endDate: "",
     budget: "",
-    transportation: "",
-    location: "",
-    activities: [],
+    destinations: [],
     customFields: [],
-    expenses: [],
     category: "leisure",
     isCollaborative: false,
     collaborators: [],
-    reminders: [],
   });
-  const [editIndex, setEditIndex] = useState(null);
+  const [editItineraryId, setEditItineraryId] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [newCollaboratorEmail, setNewCollaboratorEmail] = useState("");
   const [formErrors, setFormErrors] = useState({});
-  const [viewItineraryIndex, setViewItineraryIndex] = useState(null);
+  const [viewItineraryId, setViewItineraryId] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [plansForSelectedDate, setPlansForSelectedDate] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -114,39 +124,99 @@ const ItineraryPlanner = () => {
   const isFilterMenuOpen = Boolean(filterAnchorEl);
   const [loading, setLoading] = useState(false);
 
+  const getItinerariesCollection = useCallback(() => {
+    if (!auth.currentUser) {
+      return null;
+    }
+    return collection(db, "users", auth.currentUser.uid, "itineraries");
+  }, [auth.currentUser]);
+
+  // Fetch itineraries on component mount and when the user changes
   useEffect(() => {
     setLoading(true);
-    setTimeout(() => {
+    const itinerariesCollection = getItinerariesCollection();
+    if (!itinerariesCollection) {
       setLoading(false);
-    }, 500);
-  }, []);
+      setUserItineraries([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(
+      itinerariesCollection,
+      (snapshot) => {
+        const itinerariesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setUserItineraries(itinerariesData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching itineraries:", error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe(); // Cleanup the listener
+  }, [getItinerariesCollection]);
 
   useEffect(() => {
     if (selectedDate) {
       const formattedDate = moment(selectedDate).format("YYYY-MM-DD");
-      const plans = itineraries.filter(
+      const plans = userItineraries.filter(
         (itinerary) =>
-          moment(itinerary.startDate).format("YYYY-MM-DD") <= formattedDate &&
-          moment(itinerary.endDate).format("YYYY-MM-DD") >= formattedDate &&
+          itinerary.destinations.some(
+            (destination) =>
+              moment(destination.startDate).format("YYYY-MM-DD") <=
+                formattedDate &&
+              moment(destination.endDate).format("YYYY-MM-DD") >= formattedDate
+          ) &&
           (categoryFilter === "" || itinerary.category === categoryFilter)
       );
       setPlansForSelectedDate(plans);
     } else {
       setPlansForSelectedDate([]);
     }
-  }, [selectedDate, itineraries, categoryFilter]);
+  }, [selectedDate, userItineraries, categoryFilter]);
 
-  const handleAddItinerary = () => {
+ const handleAddItinerary = async () => {
     const errors = validateForm(currentItinerary);
     setFormErrors(errors);
 
     if (Object.keys(errors).length === 0) {
-      if (editIndex !== null) {
-        const updatedItineraries = [...itineraries];
-        updatedItineraries[editIndex] = currentItinerary;
-        setItineraries(updatedItineraries);
+        const itinerariesCollection = getItinerariesCollection();
+        if (!itinerariesCollection) return;
+
+      if (editItineraryId) {
+        // Update existing itinerary
+        await updateDoc(
+          doc(
+            db,
+            "users",
+            auth.currentUser.uid,
+            "itineraries",
+            editItineraryId
+          ),
+          currentItinerary
+        );
       } else {
-        setItineraries([...itineraries, currentItinerary]);
+            // Add new itinerary
+
+            // Prepare the new itinerary, generating IDs where necessary
+            const newItinerary = {
+                ...currentItinerary,
+                destinations: currentItinerary.destinations.map(destination => ({
+                    ...destination,
+                    id: uuidv4(),
+                    activities: (destination.activities || []).map(activity => ({ ...activity, id: uuidv4() })),
+                    expenses: (destination.expenses || []).map(expense => ({ ...expense, id: uuidv4() })),
+                    reminders: (destination.reminders || []).map(reminder => ({ ...reminder, id: uuidv4() })),
+                })),
+            };
+
+        await addDoc(
+            itinerariesCollection,
+            newItinerary
+        );
       }
       resetModal();
     }
@@ -155,7 +225,6 @@ const ItineraryPlanner = () => {
   const validateForm = (itinerary) => {
     const errors = {};
     if (!itinerary.title) errors.title = "Title is required";
-    if (!itinerary.location) errors.location = "Location is required";
     if (!itinerary.startDate) errors.startDate = "Start Date is required";
     if (!itinerary.endDate) errors.endDate = "End Date is required";
     if (
@@ -172,28 +241,37 @@ const ItineraryPlanner = () => {
     return errors;
   };
 
-  const handleDeleteItinerary = (index) => {
-    setItineraries(itineraries.filter((_, i) => i !== index));
+  const handleDeleteItinerary = async (itineraryId) => {
+    await deleteDoc(
+      doc(db, "users", auth.currentUser.uid, "itineraries", itineraryId)
+    );
   };
 
   const calculateRemaining = useCallback(() => {
-    const totalExpenses =
-      currentItinerary.expenses.reduce(
-        (sum, expense) => sum + (parseFloat(expense.amount) || 0),
-        0
-      ) +
-      currentItinerary.activities.reduce(
-        (sum, activity) => sum + (parseFloat(activity.cost) || 0),
-        0
-      );
+    const totalExpenses = currentItinerary.destinations.reduce(
+      (destSum, destination) =>
+        destSum +
+        destination.expenses.reduce(
+          (expSum, expense) => expSum + parseFloat(expense.amount || 0),
+          0
+        ) +
+        destination.activities.reduce(
+          (actSum, activity) => actSum + parseFloat(activity.cost || 0),
+          0
+        ),
+      0
+    );
     return (parseFloat(currentItinerary.budget) || 0 - totalExpenses).toFixed(
       2
     );
   }, [currentItinerary]);
 
-  const handleEditItinerary = (index) => {
-    setCurrentItinerary({ ...itineraries[index] });
-    setEditIndex(index);
+  const handleEditItinerary = (itinerary) => {
+    // DEEP COPY using JSON.parse(JSON.stringify(...))
+    const deepCopiedItinerary = JSON.parse(JSON.stringify(itinerary));
+
+    setCurrentItinerary(deepCopiedItinerary);
+    setEditItineraryId(itinerary.id);
     setOpenModal(true);
     setFormErrors({});
   };
@@ -206,17 +284,13 @@ const ItineraryPlanner = () => {
       startDate: "",
       endDate: "",
       budget: "",
-      transportation: "",
-      location: "",
-      activities: [],
+      destinations: [],
       customFields: [],
-      expenses: [],
       category: "leisure",
       isCollaborative: false,
       collaborators: [],
-      reminders: [],
     });
-    setEditIndex(null);
+    setEditItineraryId(null);
     setActiveTab(0);
     setNewCollaboratorEmail("");
     setFormErrors({});
@@ -245,66 +319,164 @@ const ItineraryPlanner = () => {
     }));
   };
 
-  const handleDragEnd = (result) => {
+ const handleDragEnd = (result) => {
     if (!result.destination) return;
-    const reorderedItineraries = Array.from(itineraries);
-    const [reorderedItem] = reorderedItineraries.splice(result.source.index, 1);
-    reorderedItineraries.splice(result.destination.index, 0, reorderedItem);
-    setItineraries(reorderedItineraries);
+
+    const { source, destination } = result;
+
+    // Dragging destinations
+    if (source.droppableId === "destinations") {
+        setCurrentItinerary((prev) => {
+            const reorderedDestinations = [...prev.destinations];
+            const [movedDestination] = reorderedDestinations.splice(source.index, 1);
+            reorderedDestinations.splice(destination.index, 0, movedDestination);
+            return { ...prev, destinations: reorderedDestinations }
+        })
+
+    }
+
+    // Dragging within a destination (activities, expenses, reminders)
+    if (source.droppableId.startsWith("destination-")) {
+        const [, destinationIndexStr, type] = source.droppableId.split("-");
+        const destinationIndex = parseInt(destinationIndexStr, 10)
+
+        setCurrentItinerary((prev) => {
+            const updatedDestinations = [...prev.destinations];
+            const items = [...(updatedDestinations[destinationIndex][`${type}s`] || [])]
+
+            const [reorderedItem] = items.splice(source.index, 1);
+            items.splice(destination.index, 0, reorderedItem);
+
+            updatedDestinations[destinationIndex] = {
+                ...updatedDestinations[destinationIndex],
+                [`${type}s`]: items
+            }
+            return { ...prev, destinations: updatedDestinations }
+        })
+    }
+
+
+    //Dragging Itineraries
+    if (source.droppableId === "itineraries") {
+      const reorderedItineraries = Array.from(userItineraries);
+      const [reorderedItem] = reorderedItineraries.splice(source.index, 1);
+      reorderedItineraries.splice(destination.index, 0, reorderedItem);
+      setUserItineraries(reorderedItineraries);
+    }
   };
 
-  const handleInputChange = (tab, index, field, value) => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      [tab]: prev[tab].map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      ),
-    }));
-  };
+  // Handles changes of particular field in sub-objects
+    const handleInputChange = (destinationIndex, tab, index, field, value) => {
+        setCurrentItinerary((prev) => {
+        const updatedDestinations = [...prev.destinations];
+        const destination = updatedDestinations[destinationIndex];
 
-  const handleAddActivity = () => {
+        const updatedTabItems = [...(destination[tab] || [])];
+        updatedTabItems[index] = { ...updatedTabItems[index], [field]: value };
+
+        updatedDestinations[destinationIndex] = {
+            ...destination,
+            [tab]: updatedTabItems,
+        };
+
+        return { ...prev, destinations: updatedDestinations };
+        });
+    };
+
+  const handleAddDestination = () => {
     setCurrentItinerary((prev) => ({
       ...prev,
-      activities: [
-        ...prev.activities,
+      destinations: [
+        ...prev.destinations,
         {
-          title: "",
-          time: "",
-          type: "sightseeing",
-          cost: "",
-          notes: "",
-          location: "",
+          id: uuidv4(),
+          name: "",
+          startDate: "",
+          endDate: "",
+          activities: [],
+          expenses: [],
+          reminders: [],
         },
       ],
     }));
   };
 
-  const handleAddExpense = () => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      expenses: [
-        ...prev.expenses,
-        { item: "", amount: "", category: "transportation", date: "" },
-      ],
-    }));
-  };
+    const handleAddActivity = (destinationIndex) => {
+    setCurrentItinerary((prev) => {
+        const updatedDestinations = [...prev.destinations]; // Copy the destinations array
+        const newActivity = {  // Create a *new* activity object
+        id: uuidv4(),
+        title: "",
+        time: "",
+        type: "sightseeing",
+        cost: "",
+        notes: "",
+        };
 
-  const handleAddReminder = () => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      reminders: [
-        ...prev.reminders,
-        { title: "", date: "", time: "", type: "activity" },
-      ],
-    }));
-  };
+        // Use concat to create a *new* activities array
+        updatedDestinations[destinationIndex] = {
+        ...updatedDestinations[destinationIndex], // Copy the destination
+        activities: [...(updatedDestinations[destinationIndex].activities || []), newActivity],
+        };
+        return { ...prev, destinations: updatedDestinations };
+    });
+    };
 
-  const handleDeleteItem = (tab, index) => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      [tab]: prev[tab].filter((_, i) => i !== index),
-    }));
-  };
+    const handleAddExpense = (destinationIndex) => {
+        setCurrentItinerary((prev) => {
+            const updatedDestinations = [...prev.destinations];
+            const newExpense = {
+                id: uuidv4(),
+                item: "",
+                amount: "",
+                category: "transportation",
+                date: "",
+            };
+            updatedDestinations[destinationIndex] = {
+                ...updatedDestinations[destinationIndex],
+                expenses: [...(updatedDestinations[destinationIndex].expenses || []), newExpense],
+            };
+            return { ...prev, destinations: updatedDestinations };
+        });
+    };
+
+    const handleAddReminder = (destinationIndex) => {
+        setCurrentItinerary((prev) => {
+            const updatedDestinations = [...prev.destinations];
+            const newReminder = {
+                    id: uuidv4(),
+                    title: "",
+                    date: "",
+                    time: "",
+                    type: "activity",
+                }
+            updatedDestinations[destinationIndex] = {
+                ...updatedDestinations[destinationIndex],
+                reminders: [...(updatedDestinations[destinationIndex].reminders || []), newReminder]
+            }
+            return { ...prev, destinations: updatedDestinations };
+        });
+    };
+    const handleDeleteDestination = (destinationIndex) => {
+        setCurrentItinerary((prev) => ({
+            ...prev,
+            destinations: prev.destinations.filter((_, i) => i !== destinationIndex), // Correct - filter creates a new array
+        }));
+    };
+
+    const handleDeleteItem = (destinationIndex, tab, index) => {
+    setCurrentItinerary((prev) => {
+        const updatedDestinations = [...prev.destinations]; // Copy destinations
+        const updatedItems = [...(updatedDestinations[destinationIndex][tab] || [])]; // Copy the specific tab's array (activities, expenses, etc.)
+
+        // Use filter to create a *new* array without the deleted item
+        updatedDestinations[destinationIndex] = {
+        ...updatedDestinations[destinationIndex], // Copy destination
+        [tab]: updatedItems.filter((_, i) => i !== index), // Filter creates a new array
+        };
+        return { ...prev, destinations: updatedDestinations };
+    });
+    };
 
   const handleAddCollaborator = () => {
     if (
@@ -334,16 +506,8 @@ const ItineraryPlanner = () => {
     }));
   };
 
-  const handleDragEndModal = (tab, result) => {
-    if (!result.destination) return;
-    const items = [...currentItinerary[tab]];
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-    setCurrentItinerary((prev) => ({ ...prev, [tab]: items }));
-  };
-
-  const handleViewItinerary = (index) => setViewItineraryIndex(index);
-  const handleCloseViewItinerary = () => setViewItineraryIndex(null);
+  const handleViewItinerary = (itineraryId) => setViewItineraryId(itineraryId);
+  const handleCloseViewItinerary = () => setViewItineraryId(null);
   const handleDateSelect = (date) => setSelectedDate(date);
   const handleFilterMenuOpen = (event) =>
     setFilterAnchorEl(event.currentTarget);
@@ -361,20 +525,40 @@ const ItineraryPlanner = () => {
     },
   });
 
-  const events = itineraries.map((itinerary) => ({
-    title: itinerary.title,
-    start: new Date(itinerary.startDate),
-    end: new Date(itinerary.endDate),
-  }));
+  const events = userItineraries.flatMap((itinerary) =>
+    itinerary.destinations.map((destination) => ({
+      title: `${itinerary.title} - ${destination.name}`,
+      start: new Date(destination.startDate),
+      end: new Date(destination.endDate),
+    }))
+  );
   const handleApplyFilter = () => handleFilterMenuClose();
   const handleClearFilter = () => {
     setCategoryFilter("");
     handleFilterMenuClose();
   };
-  const filteredItineraries = itineraries.filter(
+
+  const filteredItineraries = userItineraries.filter(
     (itinerary) =>
       categoryFilter === "" || itinerary.category === categoryFilter
   );
+  const handleDestinationChange = (index, field, value) => {
+    setCurrentItinerary((prev) => {
+      const updatedDestinations = [...prev.destinations];
+      updatedDestinations[index] = {
+        ...updatedDestinations[index],
+        [field]: value,
+      };
+      return { ...prev, destinations: updatedDestinations };
+    });
+  };
+
+  const handleItineraryInputChange = (field, value) => {
+    setCurrentItinerary((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -384,18 +568,16 @@ const ItineraryPlanner = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          bgcolor: "gray.100",
+          bgcolor: "#f5f5f5",
           fontFamily: "Arial, sans-serif",
         }}
       >
-        {/* Main Content Area - Centered */}
-        <Box sx={{ maxWidth: "1280px", mx: "auto" }}>
-          {" "}
-          {/* Max-width and auto margins for centering */}
+        <Box sx={{ maxWidth: "1280px", mx: "auto", height:"100vh" }}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Box
                 display="flex"
+              
                 justifyContent="space-between"
                 alignItems="center"
                 mb={3}
@@ -406,7 +588,6 @@ const ItineraryPlanner = () => {
                   component="h1"
                   sx={{ fontWeight: "bold" }}
                   mb={2}
-                  
                 >
                   Itinerary Planner
                 </Typography>
@@ -415,14 +596,14 @@ const ItineraryPlanner = () => {
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={() => setOpenModal(true)}
-                    sx={{ bgcolor: "#ff7723", color: "white" }}
+                    sx={{ bgcolor: "#ff6d12", color: "white" }}
                   >
                     New
                   </Button>
                   <Button
                     variant="outlined"
                     startIcon={<DownloadIcon />}
-                    sx={{ color: "#ff7723", borderColor: "#1976D2" }}
+                    sx={{ color: "#ff6d12", borderColor: "#ff6d12" }}
                   >
                     Download
                   </Button>
@@ -513,31 +694,37 @@ const ItineraryPlanner = () => {
                           {moment(selectedDate).format("MMMM DD, YYYY")}
                         </Typography>
                         {plansForSelectedDate.length > 0 ? (
-                          plansForSelectedDate.map((plan) => (
-                            <Card key={plan.title} elevation={2} sx={{ mb: 1 }}>
-                              <CardContent>
-                                <Typography
-                                  variant="subtitle1"
-                                  sx={{ fontWeight: "bold" }}
-                                >
-                                  {plan.title}
-                                </Typography>
-                                <Typography variant="body2">
-                                  Location: {plan.location}
-                                </Typography>
-                                <Typography variant="body2">
-                                  {moment(plan.startDate).format("LL")} -{" "}
-                                  {moment(plan.endDate).format("LL")}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ fontStyle: "italic" }}
-                                >
-                                  Category: {plan.category}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          ))
+                          plansForSelectedDate.map((plan) =>
+                            plan.destinations.map((destination, index) => (
+                              <Card
+                                key={`${plan.id}-${index}`}
+                                elevation={2}
+                                sx={{ mb: 1 }}
+                              >
+                                <CardContent>
+                                  <Typography
+                                    variant="subtitle1"
+                                    sx={{ fontWeight: "bold" }}
+                                  >
+                                    {plan.title} - {destination.name}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    Location: {destination.name}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {moment(destination.startDate).format("LL")}{" "}
+                                    - {moment(destination.endDate).format("LL")}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ fontStyle: "italic" }}
+                                  >
+                                    Category: {plan.category}
+                                  </Typography>
+                                </CardContent>
+                              </Card>
+                            ))
+                          )
                         ) : (
                           <Typography variant="body1">
                             No plans for this date.
@@ -556,8 +743,8 @@ const ItineraryPlanner = () => {
                         >
                           {filteredItineraries.map((itinerary, index) => (
                             <Draggable
-                              key={`${itinerary.title}-${index}`}
-                              draggableId={`${itinerary.title}-${index}`}
+                              key={itinerary.id}
+                              draggableId={itinerary.id}
                               index={index}
                             >
                               {(provided) => (
@@ -598,7 +785,7 @@ const ItineraryPlanner = () => {
                                         <IconButton
                                           color="primary"
                                           onClick={() =>
-                                            handleViewItinerary(index)
+                                            handleViewItinerary(itinerary.id)
                                           }
                                         >
                                           <VisibilityIcon />
@@ -608,7 +795,7 @@ const ItineraryPlanner = () => {
                                         <IconButton
                                           color="primary"
                                           onClick={() =>
-                                            handleEditItinerary(index)
+                                            handleEditItinerary(itinerary)
                                           }
                                         >
                                           <EditIcon />
@@ -618,7 +805,7 @@ const ItineraryPlanner = () => {
                                         <IconButton
                                           color="error"
                                           onClick={() =>
-                                            handleDeleteItinerary(index)
+                                            handleDeleteItinerary(itinerary.id)
                                           }
                                         >
                                           <DeleteIcon />
@@ -664,52 +851,79 @@ const ItineraryPlanner = () => {
             )}
 
             <Dialog
-              open={viewItineraryIndex !== null}
+              open={viewItineraryId !== null}
               onClose={handleCloseViewItinerary}
               maxWidth="md"
               fullWidth
             >
               <DialogTitle>Itinerary Details</DialogTitle>
               <DialogContent>
-                {viewItineraryIndex !== null && (
-                  <>
-                    <Typography variant="h5" sx={{ fontWeight: "bold", mb: 1 }}>
-                      {itineraries[viewItineraryIndex].title}
-                    </Typography>
-                    <Typography variant="subtitle1">
-                      {moment(itineraries[viewItineraryIndex].startDate).format(
-                        "LL"
-                      )}{" "}
-                      -{" "}
-                      {moment(itineraries[viewItineraryIndex].endDate).format(
-                        "LL"
-                      )}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mt: 1 }}>
-                      {itineraries[viewItineraryIndex].description}
-                    </Typography>
-                    <Typography variant="h6" sx={{ mt: 2, fontWeight: "bold" }}>
-                      Activities
-                    </Typography>
-                    {itineraries[viewItineraryIndex].activities.map(
-                      (activity, index) => (
-                        <Card key={index} elevation={2} sx={{ mb: 1 }}>
-                          <CardContent>
-                            <Typography
-                              variant="subtitle2"
-                              sx={{ fontWeight: "bold" }}
-                            >
-                              {activity.title}
-                            </Typography>
-                            <Typography variant="body2">
-                              {activity.time} - {activity.location}
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      )
-                    )}
-                  </>
-                )}
+                {viewItineraryId !== null &&
+                  userItineraries.find((it) => it.id === viewItineraryId) && (
+                    <>
+                      <Typography
+                        variant="h5"
+                        sx={{ fontWeight: "bold", mb: 1 }}
+                      >
+                        {
+                          userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).title
+                        }
+                      </Typography>
+                      <Typography variant="subtitle1">
+                        {moment(
+                          userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).startDate
+                        ).format("LL")}{" "}
+                        -{" "}
+                        {moment(
+                          userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).endDate
+                        ).format("LL")}
+                      </Typography>
+                      <Typography variant="body1" sx={{ mt: 1 }}>
+                        {
+                          userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).description
+                        }
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{ mt: 2, fontWeight: "bold" }}
+                      >
+                        Destinations
+                      </Typography>
+                      {userItineraries
+                        .find((it) => it.id === viewItineraryId)
+                        .destinations.map((destination, index) => (
+                          <Card key={index} elevation={2} sx={{ mb: 1 }}>
+                            <CardContent>
+                              <Typography
+                                variant="subtitle2"
+                                sx={{ fontWeight: "bold" }}
+                              >
+                                {destination.name}
+                              </Typography>
+                              <Typography variant="body2">
+                                {moment(destination.startDate).format("LL")} -{" "}
+                                {moment(destination.endDate).format("LL")}
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      {/* <ItineraryMap
+                        destinations={
+                          userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).destinations
+                        }
+                      /> */}
+                    </>
+                  )}
               </DialogContent>
               <DialogActions>
                 <Button onClick={handleCloseViewItinerary} color="primary">
@@ -726,7 +940,7 @@ const ItineraryPlanner = () => {
               scroll="paper"
             >
               <DialogTitle>
-                {editIndex !== null ? "Edit Itinerary" : "Create New Itinerary"}
+                {editItineraryId ? "Edit Itinerary" : "Create New Itinerary"}
               </DialogTitle>
               <DialogContent dividers>
                 <Tabs
@@ -740,9 +954,7 @@ const ItineraryPlanner = () => {
                   textColor="primary"
                 >
                   <Tab label="Basic Info" />
-                  <Tab label="Activities" />
-                  <Tab label="Expenses" />
-                  <Tab label="Reminders" />
+                  <Tab label="Destinations" />
                   <Tab label="Sharing" />
                 </Tabs>
 
@@ -755,10 +967,7 @@ const ItineraryPlanner = () => {
                         fullWidth
                         value={currentItinerary.title}
                         onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            title: e.target.value,
-                          }))
+                          handleItineraryInputChange("title", e.target.value)
                         }
                         error={!!formErrors.title}
                         helperText={formErrors.title}
@@ -772,10 +981,10 @@ const ItineraryPlanner = () => {
                         rows={3}
                         value={currentItinerary.description}
                         onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            description: e.target.value,
-                          }))
+                          handleItineraryInputChange(
+                            "description",
+                            e.target.value
+                          )
                         }
                       />
                     </Grid>
@@ -787,10 +996,10 @@ const ItineraryPlanner = () => {
                         InputLabelProps={{ shrink: true }}
                         value={currentItinerary.startDate}
                         onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            startDate: e.target.value,
-                          }))
+                          handleItineraryInputChange(
+                            "startDate",
+                            e.target.value
+                          )
                         }
                         error={!!formErrors.startDate}
                         helperText={formErrors.startDate}
@@ -804,10 +1013,7 @@ const ItineraryPlanner = () => {
                         InputLabelProps={{ shrink: true }}
                         value={currentItinerary.endDate}
                         onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            endDate: e.target.value,
-                          }))
+                          handleItineraryInputChange("endDate", e.target.value)
                         }
                         error={!!formErrors.endDate}
                         helperText={formErrors.endDate}
@@ -820,34 +1026,29 @@ const ItineraryPlanner = () => {
                         fullWidth
                         value={currentItinerary.budget}
                         onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            budget: e.target.value,
-                          }))
+                          handleItineraryInputChange("budget", e.target.value)
                         }
                         error={!!formErrors.budget}
                         helperText={formErrors.budget}
                       />
                     </Grid>
+
                     <Grid item xs={12} sm={6}>
                       <FormControl fullWidth>
-                        <InputLabel id="transportation-label">
-                          Transportation
-                        </InputLabel>
+                        <InputLabel>Category</InputLabel>
                         <Select
-                          labelId="transportation-label"
-                          label="Transportation"
-                          value={currentItinerary.transportation}
+                          value={currentItinerary.category}
+                          label="Category"
                           onChange={(e) =>
-                            setCurrentItinerary((prev) => ({
-                              ...prev,
-                              transportation: e.target.value,
-                            }))
+                            handleItineraryInputChange(
+                              "category",
+                              e.target.value
+                            )
                           }
                         >
-                          {TRANSPORTATIONS.map((transport) => (
-                            <MenuItem key={transport} value={transport}>
-                              {transport}
+                          {CATEGORIES.map((category) => (
+                            <MenuItem key={category} value={category}>
+                              {category}
                             </MenuItem>
                           ))}
                         </Select>
@@ -913,43 +1114,6 @@ const ItineraryPlanner = () => {
                         </Box>
                       ))}
                     </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        required
-                        label="Location"
-                        fullWidth
-                        value={currentItinerary.location}
-                        onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            location: e.target.value,
-                          }))
-                        }
-                        error={!!formErrors.location}
-                        helperText={formErrors.location}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Category</InputLabel>
-                        <Select
-                          value={currentItinerary.category}
-                          label="Category"
-                          onChange={(e) =>
-                            setCurrentItinerary((prev) => ({
-                              ...prev,
-                              category: e.target.value,
-                            }))
-                          }
-                        >
-                          {CATEGORIES.map((category) => (
-                            <MenuItem key={category} value={category}>
-                              {category}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
                   </Grid>
                 </TabPanel>
 
@@ -957,49 +1121,65 @@ const ItineraryPlanner = () => {
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
-                    onClick={handleAddActivity}
+                    onClick={handleAddDestination}
                     sx={{ mb: 2 }}
                   >
-                    Add Activity
+                    Add Destination
                   </Button>
-                  <DragDropContext
-                    onDragEnd={(result) =>
-                      handleDragEndModal("activities", result)
-                    }
-                  >
-                    <Droppable droppableId="activities">
+                  <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="destinations">
                       {(provided) => (
                         <Box
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          sx={{ display: "grid", gap: 2 }}
                         >
-                          {currentItinerary.activities.map(
-                            (activity, index) => (
+                          {currentItinerary.destinations.map(
+                            (destination, destinationIndex) => (
                               <Draggable
-                                key={index}
-                                draggableId={`activity-${index}`}
-                                index={index}
+                                key={destination.id}
+                                draggableId={destination.id}
+                                index={destinationIndex}
                               >
                                 {(provided) => (
                                   <Card
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
                                     elevation={2}
-                                    sx={{ p: 2 }}
+                                    sx={{ p: 2, mb: 2 }}
                                   >
+                                    <Box
+                                      {...provided.dragHandleProps}
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        mb: 1,
+                                      }}
+                                    >
+                                      <Typography variant="h6">
+                                        Destination {destinationIndex + 1}
+                                      </Typography>
+                                      <IconButton
+                                        color="error"
+                                        onClick={() =>
+                                          handleDeleteDestination(
+                                            destinationIndex
+                                          )
+                                        }
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Box>
                                     <Grid container spacing={2}>
                                       <Grid item xs={12} sm={6}>
                                         <TextField
-                                          label="Activity Title"
+                                          label="Destination Name"
                                           fullWidth
-                                          value={activity.title}
+                                          value={destination.name}
                                           onChange={(e) =>
-                                            handleInputChange(
-                                              "activities",
-                                              index,
-                                              "title",
+                                            handleDestinationChange(
+                                              destinationIndex,
+                                              "name",
                                               e.target.value
                                             )
                                           }
@@ -1007,70 +1187,15 @@ const ItineraryPlanner = () => {
                                       </Grid>
                                       <Grid item xs={12} sm={6}>
                                         <TextField
-                                          label="Location"
-                                          fullWidth
-                                          value={activity.location}
-                                          onChange={(e) =>
-                                            handleInputChange(
-                                              "activities",
-                                              index,
-                                              "location",
-                                              e.target.value
-                                            )
-                                          }
-                                        />
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="Time"
-                                          type="time"
+                                          label="Start Date"
+                                          type="date"
                                           fullWidth
                                           InputLabelProps={{ shrink: true }}
-                                          value={activity.time}
+                                          value={destination.startDate}
                                           onChange={(e) =>
-                                            handleInputChange(
-                                              "activities",
-                                              index,
-                                              "time",
-                                              e.target.value
-                                            )
-                                          }
-                                        />
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <FormControl fullWidth>
-                                          <InputLabel>Type</InputLabel>
-                                          <Select
-                                            value={activity.type}
-                                            label="Type"
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                "activities",
-                                                index,
-                                                "type",
-                                                e.target.value
-                                              )
-                                            }
-                                          >
-                                            {ACTIVITY_TYPES.map((type) => (
-                                              <MenuItem key={type} value={type}>
-                                                {type}
-                                              </MenuItem>
-                                            ))}
-                                          </Select>
-                                        </FormControl>
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="Cost"
-                                          type="number"
-                                          fullWidth
-                                          value={activity.cost}
-                                          onChange={(e) =>
-                                            handleInputChange(
-                                              "activities",
-                                              index,
-                                              "cost",
+                                            handleDestinationChange(
+                                              destinationIndex,
+                                              "startDate",
                                               e.target.value
                                             )
                                           }
@@ -1078,37 +1203,640 @@ const ItineraryPlanner = () => {
                                       </Grid>
                                       <Grid item xs={12} sm={6}>
                                         <TextField
-                                          label="Notes"
+                                          label="End Date"
+                                          type="date"
                                           fullWidth
-                                          multiline
-                                          rows={2}
-                                          value={activity.notes}
+                                          InputLabelProps={{ shrink: true }}
+                                          value={destination.endDate}
                                           onChange={(e) =>
-                                            handleInputChange(
-                                              "activities",
-                                              index,
-                                              "notes",
+                                            handleDestinationChange(
+                                              destinationIndex,
+                                              "endDate",
                                               e.target.value
                                             )
                                           }
                                         />
                                       </Grid>
-                                      <Grid
-                                        item
-                                        xs={12}
-                                        sx={{ textAlign: "right" }}
-                                      >
-                                        <IconButton
-                                          color="error"
-                                          onClick={() =>
-                                            handleDeleteItem(
-                                              "activities",
-                                              index
-                                            )
-                                          }
+                                      <Grid item xs={12}>
+                                        <Tabs
+                                          value={activeTab}
+                                          // onChange={(e, newValue) => setActiveTab(newValue)} Removing this as it causes problems.
+                                          variant="scrollable"
+                                          scrollButtons="auto"
+                                          allowScrollButtonsMobile
+                                          sx={{ mb: 2 }}
                                         >
-                                          <DeleteIcon />
-                                        </IconButton>
+                                          <Tab label="Activities" />
+                                          <Tab label="Expenses" />
+                                          <Tab label="Reminders" />
+                                        </Tabs>
+                                      </Grid>
+                                      <Grid item xs={12}>
+                                        {/* Activities */}
+                                        <Droppable
+                                          droppableId={`destination-${destinationIndex}-activity`}
+                                        >
+                                          {(provided) => (
+                                            <Box
+                                              {...provided.droppableProps}
+                                              ref={provided.innerRef}
+                                              sx={{ mb: 2 }}
+                                            >
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddActivity(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Activity
+                                              </Button>
+                                              {destination.activities.map(
+                                                (activity, index) => (
+                                                  <Draggable
+                                                    key={activity.id}
+                                                    draggableId={activity.id}
+                                                    index={index}
+                                                  >
+                                                    {(provided) => (
+                                                      <Card
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                        elevation={1}
+                                                        sx={{ p: 1, mb: 1 }}
+                                                      >
+                                                        <Grid
+                                                          container
+                                                          spacing={1}
+                                                        >
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Activity Title"
+                                                              size="small"
+                                                              fullWidth
+                                                              value={
+                                                                activity.title
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "activities",
+                                                                  index,
+                                                                  "title",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Time"
+                                                              type="time"
+                                                              size="small"
+                                                              fullWidth
+                                                              InputLabelProps={{
+                                                                shrink: true,
+                                                              }}
+                                                              value={
+                                                                activity.time
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "activities",
+                                                                  index,
+                                                                  "time",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <FormControl
+                                                              fullWidth
+                                                              size="small"
+                                                            >
+                                                              <InputLabel>
+                                                                Type
+                                                              </InputLabel>
+                                                              <Select
+                                                                value={
+                                                                  activity.type
+                                                                }
+                                                                label="Type"
+                                                                onChange={(e) =>
+                                                                  handleInputChange(
+                                                                    destinationIndex,
+                                                                    "activities",
+                                                                    index,
+                                                                    "type",
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                              >
+                                                                {ACTIVITY_TYPES.map(
+                                                                  (type) => (
+                                                                    <MenuItem
+                                                                      key={type}
+                                                                      value={
+                                                                        type
+                                                                      }
+                                                                    >
+                                                                      {type}
+                                                                    </MenuItem>
+                                                                  )
+                                                                )}
+                                                              </Select>
+                                                            </FormControl>
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Cost"
+                                                              type="number"
+                                                              size="small"
+                                                              fullWidth
+                                                              value={
+                                                                activity.cost
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "activities",
+                                                                  index,
+                                                                  "cost",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid item xs={12}>
+                                                            <TextField
+                                                              label="Notes"
+                                                              size="small"
+                                                              fullWidth
+                                                              multiline
+                                                              rows={2}
+                                                              value={
+                                                                activity.notes
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "activities",
+                                                                  index,
+                                                                  "notes",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sx={{
+                                                              textAlign:
+                                                                "right",
+                                                            }}
+                                                          >
+                                                            <IconButton
+                                                              color="error"
+                                                              size="small"
+                                                              onClick={() =>
+                                                                handleDeleteItem(
+                                                                  destinationIndex,
+                                                                  "activities",
+                                                                  index
+                                                                )
+                                                              }
+                                                            >
+                                                              <DeleteIcon />
+                                                            </IconButton>
+                                                          </Grid>
+                                                        </Grid>
+                                                      </Card>
+                                                    )}
+                                                  </Draggable>
+                                                )
+                                              )}
+                                              {provided.placeholder}
+                                            </Box>
+                                          )}
+                                        </Droppable>
+
+                                        {/* Expenses */}
+                                        <Droppable
+                                          droppableId={`destination-${destinationIndex}-expense`}
+                                        >
+                                          {(provided) => (
+                                            <Box
+                                              {...provided.droppableProps}
+                                              ref={provided.innerRef}
+                                              sx={{ mb: 2 }}
+                                            >
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddExpense(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Expense
+                                              </Button>
+                                              {destination.expenses.map(
+                                                (expense, index) => (
+                                                  <Draggable
+                                                    key={expense.id}
+                                                    draggableId={expense.id}
+                                                    index={index}
+                                                  >
+                                                    {(provided) => (
+                                                      <Card
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                        elevation={1}
+                                                        sx={{ p: 1, mb: 1 }}
+                                                      >
+                                                        <Grid
+                                                          container
+                                                          spacing={1}
+                                                        >
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Item"
+                                                              fullWidth
+                                                              size="small"
+                                                              value={
+                                                                expense.item
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "expenses",
+                                                                  index,
+                                                                  "item",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Amount"
+                                                              type="number"
+                                                              size="small"
+                                                              fullWidth
+                                                              value={
+                                                                expense.amount
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "expenses",
+                                                                  index,
+                                                                  "amount",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <FormControl
+                                                              fullWidth
+                                                              size="small"
+                                                            >
+                                                              <InputLabel>
+                                                                Category
+                                                              </InputLabel>
+                                                              <Select
+                                                                value={
+                                                                  expense.category
+                                                                }
+                                                                label="Category"
+                                                                onChange={(e) =>
+                                                                  handleInputChange(
+                                                                    destinationIndex,
+                                                                    "expenses",
+                                                                    index,
+                                                                    "category",
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                              >
+                                                                {EXPENSE_CATEGORIES.map(
+                                                                  (
+                                                                    category
+                                                                  ) => (
+                                                                    <MenuItem
+                                                                      key={
+                                                                        category
+                                                                      }
+                                                                      value={
+                                                                        category
+                                                                      }
+                                                                    >
+                                                                      {category}
+                                                                    </MenuItem>
+                                                                  )
+                                                                )}
+                                                              </Select>
+                                                            </FormControl>
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Date"
+                                                              size="small"
+                                                              type="date"
+                                                              fullWidth
+                                                              InputLabelProps={{
+                                                                shrink: true,
+                                                              }}
+                                                              value={
+                                                                expense.date
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "expenses",
+                                                                  index,
+                                                                  "date",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sx={{
+                                                              textAlign:
+                                                                "right",
+                                                            }}
+                                                          >
+                                                            <IconButton
+                                                              color="error"
+                                                              size="small"
+                                                              onClick={() =>
+                                                                handleDeleteItem(
+                                                                  destinationIndex,
+                                                                  "expenses",
+                                                                  index
+                                                                )
+                                                              }
+                                                            >
+                                                              <DeleteIcon />
+                                                            </IconButton>
+                                                          </Grid>
+                                                        </Grid>
+                                                      </Card>
+                                                    )}
+                                                  </Draggable>
+                                                )
+                                              )}
+                                              {provided.placeholder}
+                                            </Box>
+                                          )}
+                                        </Droppable>
+
+                                        {/* Reminders */}
+
+                                        <Droppable
+                                          droppableId={`destination-${destinationIndex}-reminder`}
+                                        >
+                                          {(provided) => (
+                                            <Box
+                                              {...provided.droppableProps}
+                                              ref={provided.innerRef}
+                                              sx={{ mb: 2 }}
+                                            >
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddReminder(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Reminder
+                                              </Button>
+
+                                              {destination.reminders.map(
+                                                (reminder, index) => (
+                                                  <Draggable
+                                                    key={reminder.id}
+                                                    draggableId={reminder.id}
+                                                    index={index}
+                                                  >
+                                                    {(provided) => (
+                                                      <Card
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                        elevation={1}
+                                                        sx={{ p: 1, mb: 1 }}
+                                                      >
+                                                        <Grid
+                                                          container
+                                                          spacing={1}
+                                                        >
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Reminder Title"
+                                                              fullWidth
+                                                              size="small"
+                                                              value={
+                                                                reminder.title
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "reminders",
+                                                                  index,
+                                                                  "title",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <FormControl
+                                                              fullWidth
+                                                              size="small"
+                                                            >
+                                                              <InputLabel>
+                                                                Type
+                                                              </InputLabel>
+                                                              <Select
+                                                                value={
+                                                                  reminder.type
+                                                                }
+                                                                label="Type"
+                                                                onChange={(e) =>
+                                                                  handleInputChange(
+                                                                    destinationIndex,
+                                                                    "reminders",
+                                                                    index,
+                                                                    "type",
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                              >
+                                                                {REMINDER_TYPES.map(
+                                                                  (type) => (
+                                                                    <MenuItem
+                                                                      key={type}
+                                                                      value={
+                                                                        type
+                                                                      }
+                                                                    >
+                                                                      {type}
+                                                                    </MenuItem>
+                                                                  )
+                                                                )}
+                                                              </Select>
+                                                            </FormControl>
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Date"
+                                                              type="date"
+                                                              fullWidth
+                                                              size="small"
+                                                              InputLabelProps={{
+                                                                shrink: true,
+                                                              }}
+                                                              value={
+                                                                reminder.date
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "reminders",
+                                                                  index,
+                                                                  "date",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sm={6}
+                                                          >
+                                                            <TextField
+                                                              label="Time"
+                                                              type="time"
+                                                              fullWidth
+                                                              size="small"
+                                                              InputLabelProps={{
+                                                                shrink: true,
+                                                              }}
+                                                              value={
+                                                                reminder.time
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleInputChange(
+                                                                  destinationIndex,
+                                                                  "reminders",
+                                                                  index,
+                                                                  "time",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                            />
+                                                          </Grid>
+                                                          <Grid
+                                                            item
+                                                            xs={12}
+                                                            sx={{
+                                                              textAlign:
+                                                                "right",
+                                                            }}
+                                                          >
+                                                            <IconButton
+                                                              color="error"
+                                                              size="small"
+                                                              onClick={() =>
+                                                                handleDeleteItem(
+                                                                  destinationIndex,
+                                                                  "reminders",
+                                                                  index
+                                                                )
+                                                              }
+                                                            >
+                                                              <DeleteIcon />
+                                                            </IconButton>
+                                                          </Grid>
+                                                        </Grid>
+                                                      </Card>
+                                                    )}
+                                                  </Draggable>
+                                                )
+                                              )}
+                                              {provided.placeholder}
+                                            </Box>
+                                          )}
+                                        </Droppable>
+                                      </Grid>
+                                      <Grid item xs={12}>
+                                        <BudgetChart
+                                          expenses={destination.expenses}
+                                          budget={currentItinerary.budget}
+                                        />
                                       </Grid>
                                     </Grid>
                                   </Card>
@@ -1126,345 +1854,15 @@ const ItineraryPlanner = () => {
                 <TabPanel value={activeTab} index={2}>
                   <Grid container spacing={3}>
                     <Grid item xs={12}>
-                      <Typography
-                        variant="h6"
-                        component="h4"
-                        sx={{ fontWeight: "bold", mb: 1 }}
-                      >
-                        Budget Overview
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Total Budget"
-                        type="number"
-                        fullWidth
-                        value={currentItinerary.budget}
-                        onChange={(e) =>
-                          setCurrentItinerary((prev) => ({
-                            ...prev,
-                            budget: e.target.value,
-                          }))
-                        }
-                      />
-                    </Grid>
-                    <Grid
-                      item
-                      xs={12}
-                      sm={6}
-                      sx={{ display: "flex", alignItems: "center" }}
-                    >
-                      <Typography variant="body1">
-                        Remaining: ${calculateRemaining()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        onClick={handleAddExpense}
-                        sx={{ mb: 2 }}
-                      >
-                        Add Expense
-                      </Button>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <DragDropContext
-                        onDragEnd={(result) =>
-                          handleDragEndModal("expenses", result)
-                        }
-                      >
-                        <Droppable droppableId="expenses">
-                          {(provided) => (
-                            <Box
-                              {...provided.droppableProps}
-                              ref={provided.innerRef}
-                              sx={{ display: "grid", gap: 2 }}
-                            >
-                              {currentItinerary.expenses.map(
-                                (expense, index) => (
-                                  <Draggable
-                                    key={index}
-                                    draggableId={`expense-${index}`}
-                                    index={index}
-                                  >
-                                    {(provided) => (
-                                      <Card
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        elevation={2}
-                                        sx={{ p: 2 }}
-                                      >
-                                        <Grid container spacing={2}>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Item"
-                                              fullWidth
-                                              value={expense.item}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "expenses",
-                                                  index,
-                                                  "item",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Amount"
-                                              type="number"
-                                              fullWidth
-                                              value={expense.amount}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "expenses",
-                                                  index,
-                                                  "amount",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <FormControl fullWidth>
-                                              <InputLabel>Category</InputLabel>
-                                              <Select
-                                                value={expense.category}
-                                                label="Category"
-                                                onChange={(e) =>
-                                                  handleInputChange(
-                                                    "expenses",
-                                                    index,
-                                                    "category",
-                                                    e.target.value
-                                                  )
-                                                }
-                                              >
-                                                {EXPENSE_CATEGORIES.map(
-                                                  (category) => (
-                                                    <MenuItem
-                                                      key={category}
-                                                      value={category}
-                                                    >
-                                                      {category}
-                                                    </MenuItem>
-                                                  )
-                                                )}
-                                              </Select>
-                                            </FormControl>
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Date"
-                                              type="date"
-                                              fullWidth
-                                              InputLabelProps={{ shrink: true }}
-                                              value={expense.date}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "expenses",
-                                                  index,
-                                                  "date",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid
-                                            item
-                                            xs={12}
-                                            sx={{ textAlign: "right" }}
-                                          >
-                                            <IconButton
-                                              color="error"
-                                              onClick={() =>
-                                                handleDeleteItem(
-                                                  "expenses",
-                                                  index
-                                                )
-                                              }
-                                            >
-                                              <DeleteIcon />
-                                            </IconButton>
-                                          </Grid>
-                                        </Grid>
-                                      </Card>
-                                    )}
-                                  </Draggable>
-                                )
-                              )}
-                              {provided.placeholder}
-                            </Box>
-                          )}
-                        </Droppable>
-                      </DragDropContext>
-                    </Grid>
-                  </Grid>
-                </TabPanel>
-
-                <TabPanel value={activeTab} index={3}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        onClick={handleAddReminder}
-                        sx={{ mb: 2 }}
-                      >
-                        Add Reminder
-                      </Button>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <DragDropContext
-                        onDragEnd={(result) =>
-                          handleDragEndModal("reminders", result)
-                        }
-                      >
-                        <Droppable droppableId="reminders">
-                          {(provided) => (
-                            <Box
-                              {...provided.droppableProps}
-                              ref={provided.innerRef}
-                              sx={{ display: "grid", gap: 2 }}
-                            >
-                              {currentItinerary.reminders.map(
-                                (reminder, index) => (
-                                  <Draggable
-                                    key={index}
-                                    draggableId={`reminder-${index}`}
-                                    index={index}
-                                  >
-                                    {(provided) => (
-                                      <Card
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        elevation={2}
-                                        sx={{ p: 2 }}
-                                      >
-                                        <Grid container spacing={2}>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Reminder Title"
-                                              fullWidth
-                                              value={reminder.title}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "reminders",
-                                                  index,
-                                                  "title",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <FormControl fullWidth>
-                                              <InputLabel>Type</InputLabel>
-                                              <Select
-                                                value={reminder.type}
-                                                label="Type"
-                                                onChange={(e) =>
-                                                  handleInputChange(
-                                                    "reminders",
-                                                    index,
-                                                    "type",
-                                                    e.target.value
-                                                  )
-                                                }
-                                              >
-                                                {REMINDER_TYPES.map((type) => (
-                                                  <MenuItem
-                                                    key={type}
-                                                    value={type}
-                                                  >
-                                                    {type}
-                                                  </MenuItem>
-                                                ))}
-                                              </Select>
-                                            </FormControl>
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Date"
-                                              type="date"
-                                              fullWidth
-                                              InputLabelProps={{ shrink: true }}
-                                              value={reminder.date}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "reminders",
-                                                  index,
-                                                  "date",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <TextField
-                                              label="Time"
-                                              type="time"
-                                              fullWidth
-                                              InputLabelProps={{ shrink: true }}
-                                              value={reminder.time}
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  "reminders",
-                                                  index,
-                                                  "time",
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </Grid>
-                                          <Grid
-                                            item
-                                            xs={12}
-                                            sx={{ textAlign: "right" }}
-                                          >
-                                            <IconButton
-                                              color="error"
-                                              onClick={() =>
-                                                handleDeleteItem(
-                                                  "reminders",
-                                                  index
-                                                )
-                                              }
-                                            >
-                                              <DeleteIcon />
-                                            </IconButton>
-                                          </Grid>
-                                        </Grid>
-                                      </Card>
-                                    )}
-                                  </Draggable>
-                                )
-                              )}
-                              {provided.placeholder}
-                            </Box>
-                          )}
-                        </Droppable>
-                      </DragDropContext>
-                    </Grid>
-                  </Grid>
-                </TabPanel>
-
-                <TabPanel value={activeTab} index={4}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12}>
                       <FormControlLabel
                         control={
                           <Switch
                             checked={currentItinerary.isCollaborative}
                             onChange={(e) =>
-                              setCurrentItinerary((prev) => ({
-                                ...prev,
-                                isCollaborative: e.target.checked,
-                              }))
+                              handleItineraryInputChange(
+                                "isCollaborative",
+                                e.target.checked
+                              )
                             }
                           />
                         }
@@ -1532,7 +1930,7 @@ const ItineraryPlanner = () => {
                   startIcon={<SaveIcon />}
                   variant="contained"
                 >
-                  {editIndex !== null ? "Update" : "Save"}
+                  {editItineraryId ? "Update" : "Save"}
                 </Button>
               </DialogActions>
             </Dialog>

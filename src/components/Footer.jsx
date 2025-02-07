@@ -7,51 +7,13 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
           {/* Logo and Description */}
-          <div>
-            <div className="flex items-center space-x-2 sm:space-x-3 mb-4">
-              <svg width="100px" height="100px">
-                {" "}
-                {/* Adjust width/height as needed */}
-                <image
-                  href="/src/assets/Logo/logo.png"
-                  width="100%"
-                  height="100%"
-                  filter="url(#inner-glow)"
-                />
-                <defs>
-                  <filter id="inner-glow">
-                    <feGaussianBlur
-                      in="SourceAlpha"
-                      stdDeviation="5"
-                      result="glow"
-                    />{" "}
-                    {/* Adjust stdDeviation for glow size */}
-                    <feComposite
-                      in="glow"
-                      in2="SourceAlpha"
-                      operator="out"
-                      result="glow"
-                    />
-                    <feFlood
-                      flood-color="orange"
-                      flood-opacity="0.7"
-                      result="tint"
-                    />{" "}
-                    {/* Adjust color and opacity */}
-                    <feComposite
-                      in="tint"
-                      in2="glow"
-                      operator="in"
-                      result="highlight"
-                    />
-                    <feComposite
-                      in="highlight"
-                      in2="SourceGraphic"
-                      operator="over"
-                    />
-                  </filter>
-                </defs>
-              </svg>
+          <div className="ml-5">
+            <div className="flex  items-center space-x-2 sm:space-x-3 mb-4">
+              <img
+                src="/src/assets/Logo/logo.png"
+                alt="ShinobiPath Logo"
+                className="h-25 mr-2 slow-spin"
+              />
               <Link
                 to="/"
                 className="text-white text-xl sm:text-2xl font-semibold hover:text-orange-400 transition duration-300"

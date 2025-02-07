@@ -30,3 +30,19 @@
  }
  
  
+ /* In your CSS file (e.g., styles.css) */
+ .slow-spin {
+  animation: slowRotation 6s linear infinite;
+}
+
+@keyframes slowRotation {
+  0% {
+    transform: rotate(-0deg);
+  }
+  50% { /* At 3 seconds (50% of 6s) */
+    transform: rotate(-720deg); /* Two full rotations in first 3 seconds */
+  }
+  100% {
+    transform: rotate(-2500deg); /* One more rotation in final 3 seconds */
+  }
+}

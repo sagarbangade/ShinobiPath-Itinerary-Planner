@@ -37,8 +37,11 @@ const LandingPageNavbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center ">
         {/* Logo/Brand Name */}
         <div className="flex items-center space-x-2 sm:space-x-3">
-          <img src="/src/assets/Logo/logo.png" alt="ShinobiPath Logo" className="h-10 bg-amber-500 rounded-3xl p-1" />
-
+          <img
+            src="/src/assets/Logo/logo.png"
+            alt="ShinobiPath Logo"
+            className="h-25 mr-2 slow-spin"
+          />
           <NavLink
             to="/"
             className="text-white text-xl sm:text-2xl lg:text-3xl font-semibold hover:text-orange-400 transition duration-300"

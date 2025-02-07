@@ -85,7 +85,7 @@ const About = () => {
               <div key={index} className="text-center">
                 <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gray-700 rounded-full mx-auto mb-4 sm:mb-6 overflow-hidden">
                   {/* Placeholder for team member image */}
-                  <img src={`/img/team-member-${index + 1}.jpg`} alt={member.name} className="w-full h-full object-cover" />
+                  <img src={`src/assets/img/sagar${index + 1}.png`} alt={member.name} className="w-full h-full object-cover" />
                 </div>
                 <h3 className="text-xl sm:text-2xl font-semibold mb-2 text-white">{member.name}</h3>
                 <p className="text-orange-400 mb-2 sm:mb-4 text-base sm:text-lg">{member.role}</p>
@@ -158,8 +158,8 @@ const stats = [
 
 const team = [
   {
-    name: "Sarah Chen",
-    role: "Co-Founder & CEO",
+    name: "Sagar Bangade",
+    role: "Founder & CEO",
     bio: "Former travel blogger turned entrepreneur with a vision to make travel planning accessible to everyone.",
   },
   {

@@ -34,11 +34,11 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center">
         {/* Logo/Brand Name */}
         <div className="flex items-center">
-          <img
-            src="/src/assets/Logo/logo.png"
-            alt="ShinobiPath Logo"
-            className="h-10 bg-amber-500 rounded-3xl p-1 mr-2"
-          />
+        <img
+                src="/src/assets/Logo/logo.png"
+                alt="ShinobiPath Logo"
+                className="h-12 mr-2 slow-spin"
+              />
           <NavLink
             to="/dashboard"
             className="text-white text-xl sm:text-2xl font-semibold hover:text-orange-400 transition duration-300"
