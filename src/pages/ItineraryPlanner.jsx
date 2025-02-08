@@ -14,6 +14,7 @@ import {
   FilterList as FilterListIcon,
   Check as CheckIcon,
   Clear as ClearIcon,
+  PinDrop as PinDropIcon,
 } from "@mui/icons-material";
 import {
   TextField,
@@ -43,6 +44,9 @@ import {
   ListItemIcon,
   Divider,
   CircularProgress,
+  List, // <-- ADD List HERE
+  ListItem, // <-- ADD ListItem HERE
+  ListItemText, // <-- ADD ListItemText HERE
 } from "@mui/material";
 
 import { Calendar, momentLocalizer } from "react-big-calendar";
@@ -84,7 +88,7 @@ TabPanel.propTypes = {
   index: PropTypes.number.isRequired,
 };
 
-const CATEGORIES = ["leisure", "adventure", "cultural"];
+const CATEGORIES = ["leisure", "adventure", "cultural", "other"];
 const TRANSPORTATIONS = ["car", "flight", "train", "bus", "other"];
 const EXPENSE_CATEGORIES = [
   "transportation",
@@ -95,7 +99,13 @@ const EXPENSE_CATEGORIES = [
   "other",
 ];
 const REMINDER_TYPES = ["activity", "reservation", "transportation", "other"];
-const ACTIVITY_TYPES = ["sightseeing", "dining", "relaxation", "adventure"];
+const ACTIVITY_TYPES = [
+  "sightseeing",
+  "dining",
+  "relaxation",
+  "adventure",
+  "other",
+];
 
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -391,8 +401,14 @@ const ItineraryPlanner = () => {
 
   const handleDeleteItinerary = async (itineraryId) => {
     console.log("handleDeleteItinerary - itineraryId:", itineraryId); // Log itinerary ID
-    console.log("handleDeleteItinerary - itinerariesCollection path (getItinerariesCollection()):", getItinerariesCollection()?.path); // Log collection path
-    console.log("handleDeleteItinerary - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    console.log(
+      "handleDeleteItinerary - itinerariesCollection path (getItinerariesCollection()):",
+      getItinerariesCollection()?.path
+    ); // Log collection path
+    console.log(
+      "handleDeleteItinerary - auth.currentUser.uid:",
+      auth.currentUser.uid
+    ); // Log user UID
     setLoading(true);
     try {
       const sharedItineraryRef = collection(db, "sharedItineraries");
@@ -427,12 +443,16 @@ const ItineraryPlanner = () => {
     }
   };
 
-
-
   const handleEditItinerary = async (itinerary) => {
     console.log("handleEditItinerary - itinerary.id:", itinerary.id); // Log itinerary ID
-    console.log("handleEditItinerary - itinerariesCollection path (getItinerariesCollection()):", getItinerariesCollection()?.path); // Log collection path
-    console.log("handleEditItinerary - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    console.log(
+      "handleEditItinerary - itinerariesCollection path (getItinerariesCollection()):",
+      getItinerariesCollection()?.path
+    ); // Log collection path
+    console.log(
+      "handleEditItinerary - auth.currentUser.uid:",
+      auth.currentUser.uid
+    ); // Log user UID
     setLoading(true);
     try {
       const deepCopiedItinerary = JSON.parse(JSON.stringify(itinerary));
@@ -706,7 +726,10 @@ const ItineraryPlanner = () => {
     console.log("auth.currentUser:", auth.currentUser);
     console.log("handleAddCollaborator - editItineraryId:", editItineraryId); // Log itinerary ID
     // console.log("handleAddCollaborator - sharedItinerariesRef path:", sharedItinerariesRef.path); // Log collection path
-    console.log("handleAddCollaborator - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    console.log(
+      "handleAddCollaborator - auth.currentUser.uid:",
+      auth.currentUser.uid
+    ); // Log user UID
     if (!newCollaboratorEmail) {
       alert("Please enter an email address.");
       return;
@@ -1082,26 +1105,142 @@ const ItineraryPlanner = () => {
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
-                                  elevation={3}
+                                  elevation={4} // Slightly more pronounced elevation
+                                  sx={{
+                                    backgroundColor: "#fff", // Still white background for cleanliness
+                                    border: "1px solid rgba(0, 0, 0, 0.1)", // Very light border
+                                    borderRadius: "8px", // More rounded corners for a softer look
+                                    boxShadow: "5px 5px 15px rgba(0,0,0,0.1)", // More noticeable shadow for depth
+                                    overflow: "hidden", // Clip content for cleaner borders
+                                    position: "relative", // For category banner positioning
+                                  }}
                                 >
+                                  {/* Category Banner (Top Left Corner) */}
+                                  <Box
+                                    sx={{
+                                      position: "absolute",
+                                      top: 0,
+                                      left: 0,
+                                      width: "100%",
+                                      height: "8px", // Height of the banner
+                                      backgroundColor:
+                                        itinerary.category === "leisure"
+                                          ? "#a5d6a7" // Green banner
+                                          : itinerary.category === "adventure"
+                                          ? "#90caf9" // Blue banner
+                                          : itinerary.category === "cultural"
+                                          ? "#ffe0b2" // Orange banner
+                                          : "#e0e0e0", // Grey banner default
+                                    }}
+                                  />
+
                                   <CardContent
                                     sx={{
                                       display: "flex",
+                                      flexDirection: {
+                                        xs: "column",
+                                        sm: "row",
+                                      },
                                       justifyContent: "space-between",
-                                      alignItems: "center",
+                                      alignItems: {
+                                        xs: "flex-start",
+                                        sm: "center",
+                                      },
+                                      gap: { xs: 2, sm: 0 },
+                                      padding: 3, // Slightly more padding inside
                                     }}
                                   >
-                                    <Box>
+                                    <Box
+                                      sx={{
+                                        width: { xs: "100%", sm: "auto" },
+                                        mb: { xs: 2, sm: 0 },
+                                      }}
+                                    >
                                       <Typography
-                                        variant="h6"
+                                        variant="h5" // Slightly larger title
                                         component="h2"
-                                        sx={{ fontWeight: "bold" }}
+                                        sx={{
+                                          fontWeight: "bold",
+                                          color: "textPrimary",
+                                          mb: 0.5,
+                                        }}
                                       >
                                         {itinerary.title}
                                       </Typography>
+                                      <Box
+                                        sx={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          mb: 1,
+                                        }}
+                                      >
+                                        {" "}
+                                        {/* Box for Category + icon + spacing */}
+                                        <ListItemIcon
+                                          sx={{
+                                            minWidth: "auto",
+                                            mr: 0.5,
+                                            color: "textSecondary",
+                                          }}
+                                        >
+                                          {" "}
+                                          {/* Icon styling */}
+                                          {itinerary.category === "leisure" ? (
+                                            <LabelIcon
+                                              sx={{ fontSize: "1.2rem" }}
+                                            />
+                                          ) : itinerary.category ===
+                                            "adventure" ? (
+                                            <ShareIcon
+                                              sx={{ fontSize: "1.2rem" }}
+                                            />
+                                          ) : itinerary.category ===
+                                            "cultural" ? (
+                                            <LabelIcon
+                                              sx={{ fontSize: "1.2rem" }}
+                                            />
+                                          ) : (
+                                            <LabelIcon
+                                              sx={{ fontSize: "1.2rem" }}
+                                            />
+                                          )}
+                                        </ListItemIcon>
+                                        <Typography
+                                          variant="subtitle1" // Subtitle1 for Category
+                                          sx={{
+                                            fontWeight: "semibold",
+                                            color: "textSecondary",
+                                          }}
+                                        >
+                                          {itinerary.category.toUpperCase()}
+                                        </Typography>
+                                        {itinerary.isCollaborative && (
+                                          <Chip
+                                            label="Collaborative"
+                                            size="small"
+                                            icon={
+                                              <ShareIcon
+                                                sx={{ fontSize: "1rem" }}
+                                              />
+                                            }
+                                            sx={{
+                                              ml: 1,
+                                              backgroundColor:
+                                                "rgba(0, 0, 0, 0.08)",
+                                              color: "textSecondary",
+                                            }}
+                                          />
+                                        )}
+                                      </Box>
+
                                       <Typography
-                                        variant="subtitle2"
+                                        variant="body2" // Body2 for Dates
                                         color="textSecondary"
+                                        sx={{
+                                          mt: 0,
+                                          mb: 1,
+                                          fontSize: "0.95rem",
+                                        }} // Adjusted date styling
                                       >
                                         {moment(itinerary.startDate).format(
                                           "LL"
@@ -1109,36 +1248,119 @@ const ItineraryPlanner = () => {
                                         -{" "}
                                         {moment(itinerary.endDate).format("LL")}
                                       </Typography>
+
+                                      {itinerary.destinations.length > 0 && (
+                                        <Box sx={{ mt: 1.5 }}>
+                                          <Typography
+                                            variant="overline" // Overline for "Destinations" label - small caps
+                                            sx={{
+                                              fontWeight: "bold",
+                                              color: "grey",
+                                              display: "block",
+                                              mb: 0.5,
+                                            }} // Block display and margin
+                                          >
+                                            Destinations
+                                          </Typography>
+                                          <List dense sx={{ py: 0 }}>
+                                            {" "}
+                                            {/* Using MUI List for cleaner vertical spacing */}
+                                            {itinerary.destinations.map(
+                                              (destination, index) => (
+                                                <ListItem
+                                                  key={index}
+                                                  sx={{ py: 0.3 }}
+                                                >
+                                                  {" "}
+                                                  {/* Reduced vertical padding in list item */}
+                                                  <ListItemIcon
+                                                    sx={{
+                                                      minWidth: "auto",
+                                                      mr: 1,
+                                                      color: "grey",
+                                                    }}
+                                                  >
+                                                    {" "}
+                                                    {/* Map pin icon */}
+                                                    <PinDropIcon
+                                                      sx={{ fontSize: "1rem" }}
+                                                    />
+                                                  </ListItemIcon>
+                                                  <ListItemText
+                                                    primaryTypographyProps={{
+                                                      variant: "body2",
+                                                      color: "textPrimary",
+                                                    }} // Body2 for destination names
+                                                    primary={destination.name}
+                                                  />
+                                                </ListItem>
+                                              )
+                                            )}
+                                          </List>
+                                        </Box>
+                                      )}
                                     </Box>
-                                    <Box display="flex">
+                                    <Box
+                                      display="flex"
+                                      sx={{
+                                        flexDirection: {
+                                          xs: "row",
+                                          sm: "column",
+                                        },
+                                        alignItems: {
+                                          xs: "center",
+                                          sm: "flex-end",
+                                        },
+                                      }}
+                                    >
                                       <Tooltip title="View Details">
                                         <IconButton
                                           color="primary"
+                                          size="small"
                                           onClick={() =>
                                             handleViewItinerary(itinerary.id)
                                           }
                                         >
-                                          <VisibilityIcon />
+                                          <VisibilityIcon
+                                            sx={{ fontSize: "1.3rem" }}
+                                          />
                                         </IconButton>
                                       </Tooltip>
                                       <Tooltip title="Edit Itinerary">
                                         <IconButton
-                                          color="primary"
+                                          size="small"
                                           onClick={() =>
                                             handleEditItinerary(itinerary)
                                           }
                                         >
-                                          <EditIcon />
+                                          <EditIcon
+                                            sx={{ fontSize: "1.3rem", color: "orange" }}
+                                          />
                                         </IconButton>
                                       </Tooltip>
                                       <Tooltip title="Delete Itinerary">
                                         <IconButton
-                                          color="error"
+                                          size="small"
                                           onClick={() =>
                                             handleDeleteItinerary(itinerary.id)
                                           }
                                         >
-                                          <DeleteIcon />
+                                          <DeleteIcon
+                                            sx={{ fontSize: "1.3rem", color: "red" }}
+                                          />
+                                        </IconButton>
+                                      </Tooltip>
+                                      
+                                      <Tooltip title="Download Itinerary">
+                                        <IconButton
+                                          size="small"
+                                          // onClick={() =>
+                                            
+                                          // }
+                                        >
+                                          <DownloadIcon
+                                            sx={{ fontSize: "1.3rem", color: "green" }}
+                                          />
                                         </IconButton>
                                       </Tooltip>
                                     </Box>
