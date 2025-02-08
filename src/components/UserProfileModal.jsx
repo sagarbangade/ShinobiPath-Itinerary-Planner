@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebase/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { User, X, Edit, Save, Loader2, AlertTriangle } from "lucide-react"; // Import necessary icons
+import { updateProfile } from "firebase/auth";
 
 const UserProfileModal = ({ isOpen, onClose }) => {
   const user = auth.currentUser;
@@ -152,20 +153,29 @@ const UserProfileModal = ({ isOpen, onClose }) => {
       const docRef = doc(db, "users", user.uid);
 
       // Log the document path (for good measure)
-      console.log("Updating document:", docRef.path);
+      console.log("Updating document in Firestore:", docRef.path, profileData);
 
-      // Only update fields that are part of the profileData
+      // Only update fields that are part of the profileData in Firestore
       await updateDoc(docRef, profileData);
+      console.log("Firestore updateDoc completed."); // Log after Firestore update
 
-      // Update the user's display name in Firebase Authentication
-      if (auth.currentUser.displayName !== profileData.displayName) {
-        console.log("Updating Display Name");
-        await auth.currentUser.updateProfile({
+      // **ADD THIS SECTION TO UPDATE FIREBASE AUTH PROFILE:**
+      if (auth.currentUser.displayName !== profileData.displayName || auth.currentUser.photoURL !== profileData.photoURL) {
+        console.log("Updating Firebase Authentication Profile");
+        console.log("Profile Data for Authentication Update:", {
           displayName: profileData.displayName,
+          photoURL: profileData.photoURL,
         });
+        await updateProfile(auth.currentUser, { // Use updateProfile here!
+          displayName: profileData.displayName,
+          photoURL: profileData.photoURL,
+        });
+        console.log("Firebase Authentication profile updated.");
+      } else {
+        console.log("No changes in displayName or photoURL for Auth profile update.");
       }
 
-      console.log("Profile update successful!"); // Log success
+      console.log("Profile update process successful!"); // General success log
 
       setSuccess(true);
       setTimeout(onClose, 2000);

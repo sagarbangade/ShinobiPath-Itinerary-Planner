@@ -34,16 +34,16 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center">
         {/* Logo/Brand Name */}
         <div className="flex items-center">
-        <img
-                src="/src/assets/Logo/logo.png"
-                alt="ShinobiPath Logo"
-                className="h-12 mr-2 slow-spin"
-              />
+          <img
+            src="/src/assets/Logo/logo.png"
+            alt="ShinobiPath Logo"
+            className="h-12 mr-2 slow-spin"
+          />
           <NavLink
             to="/dashboard"
             className="text-white text-xl sm:text-2xl font-semibold hover:text-orange-400 transition duration-300"
           >
-            ShinobiPath
+            SHINOBI PATH
           </NavLink>
         </div>
 
@@ -99,7 +99,6 @@ const Navbar = () => {
 
         {/* Mobile Menu Button */}
         <div className="md:hidden flex items-center">
-          
           <button
             onClick={toggleMobileMenu}
             className="text-white hover:text-orange-400 focus:outline-none"
@@ -113,7 +112,7 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden fixed top-0 left-0 w-full bg-gray-900 z-40">
           <div className="py-1 pl-1 pr-4 flex justify-between">
-          <button
+            <button
               onClick={openProfileModal}
               className="text-white hover:text-orange-400 transition duration-300 block px-4 py-3 text-xl flex items-center"
             >
@@ -138,7 +137,6 @@ const Navbar = () => {
           <div className="flex flex-col">
             {" "}
             {/* Removed justify-center and h-full */}
-
             <NavLink
               to="/dashboard"
               className={({ isActive }) =>
@@ -161,7 +159,6 @@ const Navbar = () => {
             >
               Travel Planner
             </NavLink>
-           
             <button
               onClick={handleLogout}
               className="bg-orange-600 text-white px-4 py-2 rounded-full hover:bg-orange-700 transition duration-300 block mt-4 mx-4 mb-4" // Added margin

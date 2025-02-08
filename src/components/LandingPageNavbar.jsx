@@ -46,7 +46,7 @@ const LandingPageNavbar = () => {
             to="/"
             className="text-white text-xl sm:text-2xl lg:text-3xl font-semibold hover:text-orange-400 transition duration-300"
           >
-            ShinobiPath
+            SHINOBI PATH
           </NavLink>
         </div>
 

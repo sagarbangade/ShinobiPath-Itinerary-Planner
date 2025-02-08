@@ -18,7 +18,7 @@ const Footer = () => {
                 to="/"
                 className="text-white text-xl sm:text-2xl font-semibold hover:text-orange-400 transition duration-300"
               >
-                ShinobiPath
+                SHINOBI PATH
               </Link>
             </div>
             <p className="text-sm sm:text-base">
