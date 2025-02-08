@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useRef } from "react";
 import PropTypes from "prop-types";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { InputAdornment } from "@mui/material";
+import { Search as SearchIcon } from "@mui/icons-material";
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -15,6 +18,19 @@ import {
   Check as CheckIcon,
   Clear as ClearIcon,
   PinDrop as PinDropIcon,
+  Info as InfoIcon, // Added InfoIcon
+  Event as EventIcon, // Added EventIcon
+  AttachMoney as AttachMoneyIcon, // Added AttachMoneyIcon
+  Category as CategoryIcon, // Added CategoryIcon
+  People as PeopleIcon, // Added PeopleIcon
+  Description as DescriptionIcon, // Added DescriptionIcon
+  TextFields as TextFieldsIcon, // Added TextFieldsIcon
+  AccountCircle as AccountCircleIcon, // Added AccountCircleIcon
+  LocationOn as LocationOnIcon, // Added LocationOnIcon
+  CalendarMonth as CalendarMonthIcon, // Added CalendarMonthIcon
+  DirectionsRun as DirectionsRunIcon, // Added DirectionsRunIcon
+  ShoppingCart as ShoppingCartIcon, // Added ShoppingCartIcon
+  Alarm as AlarmIcon, // Added AlarmIcon
 } from "@mui/icons-material";
 import {
   TextField,
@@ -47,7 +63,10 @@ import {
   List, // <-- ADD List HERE
   ListItem, // <-- ADD ListItem HERE
   ListItemText, // <-- ADD ListItemText HERE
+  
 } from "@mui/material";
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
@@ -106,13 +125,90 @@ const ACTIVITY_TYPES = [
   "adventure",
   "other",
 ];
+// Custom Toolbar Component
+const MyCustomToolbar = ({ label, onNavigate, onView, view, sx }) => {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", ...sx }}>
+      <Box>
+        <IconButton aria-label="prev" onClick={() => onNavigate('PREV')}>
+          <NavigateBeforeIcon />
+        </IconButton>
+        <IconButton aria-label="next" onClick={() => onNavigate('NEXT')}>
+          <NavigateNextIcon />
+        </IconButton>
+        <Button
+          size="small"
+          onClick={() => onView('today')}
+          sx={{ ml: 1, textTransform: "none" }}
+        >
+          Today
+        </Button>
+      </Box>
+      <Typography variant="h6" component="h4" sx={{ fontWeight: "bold", color: "text.primary" }}>
+        {label}
+      </Typography>
+      <Box>
+        <Button
+          size="small"
+          variant={view === 'month' ? 'contained' : 'outlined'}
+          onClick={() => onView('month')}
+          sx={{ mr: 1, textTransform: "none" }}
+        >
+          Month
+        </Button>
+        <Button
+          size="small"
+          variant={view === 'week' ? 'contained' : 'outlined'}
+          onClick={() => onView('week')}
+          sx={{ textTransform: "none" }}
+        >
+          Week
+        </Button>
+      </Box>
+    </Box>
+  );
+};
 
+
+// Custom Month Header Component
+const MyCustomMonthHeader = ({ label, sx }) => {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-around", ...sx }}>
+      {label.split(',').map((day, index) => (
+        <Typography key={index} sx={{ width: "14.28%", textAlign: "center", ...sx }}>
+          {day}
+        </Typography>
+      ))}
+    </Box>
+  );
+};
+
+
+// Custom Date Cell Component
+const MyCustomDateCell = ({ children, sx, ...otherProps }) => {
+  return (
+    <Box sx={{ ...sx, ...otherProps }}>
+      {children}
+    </Box>
+  );
+};
+
+
+// Custom Event Component
+const MyCustomEvent = ({ event, title, sx, ...props }) => {
+  return (
+    <Box sx={{ padding: "2px 5px", fontSize: "0.875rem", ...sx }} {...props}>
+      {title}
+    </Box>
+  );
+};
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 };
 
 const ItineraryPlanner = () => {
+  const [searchQuery, setSearchQuery] = useState("");
   const [userItineraries, setUserItineraries] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [currentItinerary, setCurrentItinerary] = useState({
@@ -138,6 +234,17 @@ const ItineraryPlanner = () => {
   const [filterAnchorEl, setFilterAnchorEl] = useState(null);
   const isFilterMenuOpen = Boolean(filterAnchorEl);
   const [loading, setLoading] = useState(false);
+  const dialogContentRef = useRef(null);
+
+  const handlePrint = useCallback(() => {
+    // Use useCallback for better practice
+    if (dialogContentRef.current) {
+      window.print(); // Directly call window.print()
+    } else {
+      console.error("Dialog content ref is not available for printing.");
+      alert("Could not print itinerary. Content not found.");
+    }
+  }, []);
 
   const getItinerariesCollection = useCallback(() => {
     if (!auth.currentUser) {
@@ -267,14 +374,19 @@ const ItineraryPlanner = () => {
                 formattedDate &&
               moment(destination.endDate).format("YYYY-MM-DD") >= formattedDate
           ) &&
-          (categoryFilter === "" || itinerary.category === categoryFilter)
+          (categoryFilter === "" || itinerary.category === categoryFilter) &&
+          (searchQuery === "" || // Add search filter here
+            itinerary.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            itinerary.description.toLowerCase().includes(searchQuery.toLowerCase()))
       );
       setPlansForSelectedDate(plans);
     } else {
       setPlansForSelectedDate([]);
     }
-  }, [selectedDate, userItineraries, categoryFilter]);
-
+  }, [selectedDate, userItineraries, categoryFilter, searchQuery]);
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+  };
   const handleAddItinerary = async () => {
     console.log("auth.currentUser:", auth.currentUser);
     const errors = validateForm(currentItinerary);
@@ -897,8 +1009,12 @@ const ItineraryPlanner = () => {
 
   const filteredItineraries = userItineraries.filter(
     (itinerary) =>
-      categoryFilter === "" || itinerary.category === categoryFilter
+      (categoryFilter === "" || itinerary.category === categoryFilter) &&
+      (searchQuery === "" || // Apply search filter here
+        itinerary.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        itinerary.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
   const handleDestinationChange = (index, field, value) => {
     setCurrentItinerary((prev) => {
       const updatedDestinations = [...prev.destinations];
@@ -935,16 +1051,33 @@ const ItineraryPlanner = () => {
                 alignItems="center"
                 mb={3}
                 flexDirection={{ xs: "column", sm: "row" }}
+                gap={{ xs: 2, sm: 0 }} // Added gap for better mobile layout
               >
                 <Typography
                   variant="h4"
                   component="h1"
                   sx={{ fontWeight: "bold" }}
-                  mb={2}
+                  mb={{ xs: 1, sm: 2 }} // Adjust margin for mobile
                 >
                   Itinerary Planner
                 </Typography>
-                <Box display="flex" gap={1}>
+
+                <Box display="flex" gap={1} alignItems="center"> {/* Align items vertically in the button box */}
+                  <TextField
+                    label="Search Itineraries"
+                    variant="outlined"
+                    size="small"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ mr: 1, width: { xs: '100%', sm: 'auto', md: 300 } }} // Responsive width
+                  />
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
@@ -953,13 +1086,7 @@ const ItineraryPlanner = () => {
                   >
                     New
                   </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    sx={{ color: "#ff6d12", borderColor: "#ff6d12" }}
-                  >
-                    Download
-                  </Button>
+
 
                   <Tooltip title="Filter by Category">
                     <IconButton
@@ -1334,7 +1461,10 @@ const ItineraryPlanner = () => {
                                           }
                                         >
                                           <EditIcon
-                                            sx={{ fontSize: "1.3rem", color: "orange" }}
+                                            sx={{
+                                              fontSize: "1.3rem",
+                                              color: "orange",
+                                            }}
                                           />
                                         </IconButton>
                                       </Tooltip>
@@ -1346,20 +1476,29 @@ const ItineraryPlanner = () => {
                                           }
                                         >
                                           <DeleteIcon
-                                            sx={{ fontSize: "1.3rem", color: "red" }}
+                                            sx={{
+                                              fontSize: "1.3rem",
+                                              color: "red",
+                                            }}
                                           />
                                         </IconButton>
                                       </Tooltip>
-                                      
-                                      <Tooltip title="Download Itinerary">
+
+                                      <Tooltip title="Print Itinerary">
                                         <IconButton
                                           size="small"
-                                          // onClick={() =>
-                                            
-                                          // }
+                                          onClick={async () => {
+                                            await handleViewItinerary(
+                                              itinerary.id
+                                            );
+                                            handlePrint();
+                                          }}
                                         >
                                           <DownloadIcon
-                                            sx={{ fontSize: "1.3rem", color: "green" }}
+                                            sx={{
+                                              fontSize: "1.3rem",
+                                              color: "green",
+                                            }}
                                           />
                                         </IconButton>
                                       </Tooltip>
@@ -1377,28 +1516,78 @@ const ItineraryPlanner = () => {
                 </Grid>
 
                 <Grid item xs={12} md={4}>
-                  <Card elevation={3}>
-                    <CardContent>
-                      <Typography
-                        variant="h6"
-                        component="h3"
-                        sx={{ fontWeight: "bold", mb: 1 }}
-                      >
-                        Calendar
-                      </Typography>
-                      <Calendar
-                        localizer={localizer}
-                        events={events}
-                        startAccessor="start"
-                        endAccessor="end"
-                        style={{ height: 500 }}
-                        onSelectSlot={({ start }) => handleDateSelect(start)}
-                        selectable={true}
-                        eventPropGetter={eventStyleGetter}
-                      />
-                    </CardContent>
-                  </Card>
-                </Grid>
+  <Card elevation={3} sx={{ borderRadius: "12px" }}> {/* Rounded corners for the card */}
+    <CardContent sx={{ padding: 3 }}> {/* Increased padding within CardContent */}
+      <Typography
+        variant="h6"
+        component="h3"
+        sx={{
+          fontWeight: "bold",
+          mb: 2, // Increased margin bottom for better spacing
+          color: "#ff6d12", // Use primary color from your theme
+          textAlign: "center", // Center the title
+        }}
+      >
+        Calendar
+      </Typography>
+      <Box sx={{ overflow: "hidden", borderRadius: "8px" }}> {/* Rounded corners for the calendar itself, clipping overflow */}
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: 500 }} // Keep the height style if you need it fixed
+          onSelectSlot={({ start }) => handleDateSelect(start)}
+          selectable={true}
+          eventPropGetter={eventStyleGetter}
+          className="itinerary-calendar" // Add a className for more specific CSS if needed
+          components={{
+            toolbar: (props) => (
+              <MyCustomToolbar
+                {...props}
+                sx={{
+                  backgroundColor: "#f0f0f0", // Light background for toolbar
+                  borderBottom: "1px solid #e0e0e0", // Separator line
+                  padding: "8px 16px", // Padding for toolbar content
+                  borderRadius: "8px 8px 0 0", // Rounded top corners to match calendar box
+                }}
+              />
+            ),
+            month: {
+              header: (props) => (
+                <MyCustomMonthHeader
+                  {...props}
+                  sx={{
+                    backgroundColor: "#fafafa", // Slightly lighter background for month header
+                    padding: "6px 0",
+                    fontWeight: "bold",
+                    color: "text.secondary", // Muted color for weekdays
+                  }}
+                />
+              ),
+              date: (props) => (
+                <MyCustomDateCell
+                  {...props}
+                  sx={{
+                    padding: "8px",
+                    border: "1px solid #eee", // Light grid lines
+                    textAlign: "center",
+                    "&:hover": {
+                      backgroundColor: "#f5f5f5", // Hover effect on date cells
+                    },
+                  }}
+                />
+              ),
+            },
+            event: (props) => (
+              <MyCustomEvent {...props} sx={{ boxShadow: "0 1px 3px rgba(0,0,0,0.12)" }} /> // Subtle shadow for events
+            ),
+          }}
+        />
+      </Box>
+    </CardContent>
+  </Card>
+</Grid>
               </>
             )}
 
@@ -1407,15 +1596,78 @@ const ItineraryPlanner = () => {
               onClose={handleCloseViewItinerary}
               maxWidth="md"
               fullWidth
+              scroll="paper"
+              sx={{
+                "& .MuiDialog-paper": {
+                  borderRadius: "16px",
+                  overflowY: "visible",
+                },
+              }}
             >
-              <DialogTitle>Itinerary Details</DialogTitle>
-              <DialogContent>
+              <DialogTitle
+                sx={{
+                  padding: "1px 20px", // Reduced padding for title
+                  fontWeight: "bold",
+                  fontSize: "1.75rem", // Slightly smaller title font
+                  color: "#263238",
+                  backgroundColor: "#f0f4c3",
+                  borderBottom: "2px solid #e0e0e0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Box display="flex" alignItems="center">
+                  <VisibilityIcon
+                    sx={{ mr: 1, fontSize: "1.75rem", color: "#ffb300" }}
+                  />
+                  {/* Itinerary Details */}
+                </Box>
+                <Box display="flex">
+                  {" "}
+                  {/* Container for action buttons in title */}
+                  <Tooltip title="Print">
+                    <IconButton
+                      aria-label="download"
+                      sx={{ color: "#757575", mr: 1 }}
+                    >
+                      {" "}
+                      {/* Download button before close */}
+                      <DownloadIcon onClick={handlePrint} />
+                    </IconButton>
+                  </Tooltip>
+                  <IconButton
+                    aria-label="close"
+                    onClick={handleCloseViewItinerary}
+                    sx={{ color: "#757575" }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+              </DialogTitle>
+              <DialogContent
+                dividers
+                sx={{
+                  padding: { xs: "16px", sm: "24px" },
+                  backgroundColor: "#fafafa",
+                }} // Responsive padding for content
+                ref={dialogContentRef}
+              >
                 {viewItineraryId !== null &&
                   userItineraries.find((it) => it.id === viewItineraryId) && (
-                    <>
+                    <Box>
                       <Typography
-                        variant="h5"
-                        sx={{ fontWeight: "bold", mb: 1 }}
+                        variant="h4"
+                        component="h2"
+                        align="center" // Center align the main title
+                        sx={{
+                          fontWeight: "bold",
+                          mb: 3,
+                          color: "#37474f",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          fontSize: { xs: "2rem", sm: "2.5rem", md: "3rem" }, // More responsive title size
+                        }}
                       >
                         {
                           userItineraries.find(
@@ -1423,65 +1675,752 @@ const ItineraryPlanner = () => {
                           ).title
                         }
                       </Typography>
-                      <Typography variant="subtitle1">
-                        {moment(
-                          userItineraries.find(
-                            (it) => it.id === viewItineraryId
-                          ).startDate
-                        ).format("LL")}{" "}
-                        -{" "}
-                        {moment(
-                          userItineraries.find(
-                            (it) => it.id === viewItineraryId
-                          ).endDate
-                        ).format("LL")}
-                      </Typography>
-                      <Typography variant="body1" sx={{ mt: 1 }}>
-                        {
-                          userItineraries.find(
-                            (it) => it.id === viewItineraryId
-                          ).description
-                        }
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        sx={{ mt: 2, fontWeight: "bold" }}
-                      >
-                        Destinations
-                      </Typography>
-                      {userItineraries
-                        .find((it) => it.id === viewItineraryId)
-                        .destinations.map((destination, index) => (
-                          <Card key={index} elevation={2} sx={{ mb: 1 }}>
-                            <CardContent>
+                      <Grid container spacing={3}>
+                        {" "}
+                        {/* Main Grid Container for all sections */}
+                        <Grid item xs={12}>
+                          {" "}
+                          {/* Basic Information Section - Full width on all devices */}
+                          <Card
+                            elevation={2}
+                            sx={{
+                              borderRadius: "10px",
+                              backgroundColor: "#fffde7",
+                            }}
+                          >
+                            <CardContent
+                              sx={{ padding: { xs: "12px", sm: "16px" } }}
+                            >
+                              {" "}
+                              {/* Responsive padding inside CardContent */}
                               <Typography
-                                variant="subtitle2"
-                                sx={{ fontWeight: "bold" }}
+                                variant="h6"
+                                sx={{
+                                  fontWeight: "bold",
+                                  mb: 1.5, // Slightly increased margin bottom
+                                  color: "#455a64",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  fontSize: "1.3rem", // Adjusted section title size
+                                }}
                               >
-                                {destination.name}
+                                <InfoIcon sx={{ mr: 1, color: "#ffca28" }} />{" "}
+                                Basic Information
                               </Typography>
-                              <Typography variant="body2">
-                                {moment(destination.startDate).format("LL")} -{" "}
-                                {moment(destination.endDate).format("LL")}
+                              <Grid container spacing={2}>
+                                {" "}
+                                {/* Grid inside Basic Info Card */}
+                                <Grid item xs={12} sm={6}>
+                                  <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mb={0.5}
+                                  >
+                                    <EventIcon
+                                      sx={{ mr: 1, color: "#78909c" }}
+                                    />
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        color: "#546e7a",
+                                        fontSize: "1rem",
+                                      }} // Adjusted subtitle size
+                                    >
+                                      Dates:
+                                    </Typography>
+                                  </Box>
+                                  <Typography
+                                    variant="body1"
+                                    sx={{
+                                      color: "#607d8b",
+                                      fontSize: "0.9rem", // Slightly reduced body text size
+                                    }}
+                                  >
+                                    {moment(
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).startDate
+                                    ).format("LL")}{" "}
+                                    -{" "}
+                                    {moment(
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).endDate
+                                    ).format("LL")}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mb={0.5}
+                                  >
+                                    <Typography
+                                      sx={{
+                                        mr: 1,
+                                        color: "#78909c",
+                                        fontSize: "1.5rem", // Adjust size to match icon
+                                        display: "inline-flex", // Ensure it behaves like an inline icon
+                                        verticalAlign: "middle", // Align vertically with text
+                                      }}
+                                    >
+                                      ₹
+                                    </Typography>
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        color: "#546e7a",
+                                        fontSize: "1rem",
+                                        marginRight: "3px",
+                                      }} // Adjusted subtitle size
+                                    >
+                                      Budget:
+                                    </Typography>
+                                    <Typography
+                                      variant="body1"
+                                      sx={{
+                                        color: "#607d8b",
+                                        fontSize: "1rem", // Slightly reduced body text size
+                                      }}
+                                    >
+                                      {
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).budget
+                                      }
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mb={0.5}
+                                  >
+                                    <CategoryIcon
+                                      sx={{ mr: 1, color: "#78909c" }}
+                                    />
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        color: "#546e7a",
+                                        fontSize: "1rem",
+                                      }} // Adjusted subtitle size
+                                    >
+                                      Category:
+                                    </Typography>
+                                  </Box>
+                                  <Chip
+                                    label={
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).category
+                                    }
+                                    size="small"
+                                    sx={{
+                                      backgroundColor: "#ffe0b2",
+                                      color: "#ef6c00",
+                                      fontWeight: "bold",
+                                      fontSize: "0.8rem", // Slightly smaller chip font size
+                                    }}
+                                    icon={
+                                      <LabelIcon
+                                        style={{
+                                          color: "#ef6c00",
+                                          fontSize: "1rem", // Adjusted chip icon size
+                                        }}
+                                      />
+                                    }
+                                  />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mb={0.5}
+                                  >
+                                    <PeopleIcon
+                                      sx={{ mr: 1, color: "#78909c" }}
+                                    />
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        color: "#546e7a",
+                                        fontSize: "1rem",
+                                      }} // Adjusted subtitle size
+                                    >
+                                      Collaborative:
+                                    </Typography>
+                                  </Box>
+                                  <Chip
+                                    label={
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).isCollaborative
+                                        ? "Yes"
+                                        : "No"
+                                    }
+                                    size="small"
+                                    color={
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).isCollaborative
+                                        ? "success"
+                                        : "default"
+                                    }
+                                    sx={{
+                                      fontSize: "0.8rem", // Slightly smaller chip font size
+                                    }}
+                                    icon={
+                                      userItineraries.find(
+                                        (it) => it.id === viewItineraryId
+                                      ).isCollaborative ? (
+                                        <CheckIcon
+                                          style={{
+                                            fontSize: "1rem", // Adjusted chip icon size
+                                          }}
+                                        />
+                                      ) : null
+                                    }
+                                  />
+                                </Grid>
+                              </Grid>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid item xs={12}>
+                          {" "}
+                          {/* Description Section - Full width on all devices */}
+                          <Card
+                            elevation={2}
+                            sx={{
+                              borderRadius: "10px",
+                              backgroundColor: "#e8f5e9",
+                            }}
+                          >
+                            <CardContent
+                              sx={{ padding: { xs: "12px", sm: "16px" } }}
+                            >
+                              {" "}
+                              {/* Responsive padding inside CardContent */}
+                              <Typography
+                                variant="h6"
+                                sx={{
+                                  fontWeight: "bold",
+                                  mb: 1.5, // Slightly increased margin bottom
+                                  color: "#455a64",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  fontSize: "1.3rem", // Adjusted section title size
+                                }}
+                              >
+                                <DescriptionIcon
+                                  sx={{ mr: 1, color: "#81c784" }}
+                                />{" "}
+                                Description
+                              </Typography>
+                              <Typography
+                                variant="body1"
+                                sx={{
+                                  color: "#607d8b",
+                                  fontSize: "0.9rem", // Slightly reduced body text size
+                                }}
+                              >
+                                {
+                                  userItineraries.find(
+                                    (it) => it.id === viewItineraryId
+                                  ).description
+                                }
                               </Typography>
                             </CardContent>
                           </Card>
-                        ))}
-                      {/* <ItineraryMap
-                        destinations={
-                          userItineraries.find(
-                            (it) => it.id === viewItineraryId
-                          ).destinations
-                        }
-                      /> */}
-                    </>
+                        </Grid>
+                        {userItineraries.find((it) => it.id === viewItineraryId)
+                          .customFields.length > 0 && (
+                          <Grid item xs={12}>
+                            {" "}
+                            {/* Custom Fields Section - Full width on all devices */}
+                            <Card
+                              elevation={2}
+                              sx={{
+                                borderRadius: "10px",
+                                backgroundColor: "#fce4ec",
+                              }}
+                            >
+                              <CardContent
+                                sx={{ padding: { xs: "12px", sm: "16px" } }}
+                              >
+                                {" "}
+                                {/* Responsive padding inside CardContent */}
+                                <Typography
+                                  variant="h6"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    mb: 1.5, // Slightly increased margin bottom
+                                    color: "#455a64",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    fontSize: "1.3rem", // Adjusted section title size
+                                  }}
+                                >
+                                  <TextFieldsIcon
+                                    sx={{ mr: 1, color: "#f06292" }}
+                                  />{" "}
+                                  Custom Fields
+                                </Typography>
+                                <List dense>
+                                  {userItineraries
+                                    .find((it) => it.id === viewItineraryId)
+                                    .customFields.map((field, index) => (
+                                      <ListItem
+                                        key={index}
+                                        disableGutters
+                                        sx={{
+                                          padding: "6px 0",
+                                          borderBottom: "1px dashed #f8bbd0",
+                                        }}
+                                      >
+                                        <ListItemText
+                                          primary={`${field.label}:`}
+                                          secondary={field.value}
+                                          primaryTypographyProps={{
+                                            variant: "subtitle2",
+                                            fontWeight: "bold",
+                                            color: "#546e7a",
+                                            fontSize: "0.9rem", // Slightly reduced subtitle size
+                                          }}
+                                          secondaryTypographyProps={{
+                                            variant: "body2",
+                                            color: "#607d8b",
+                                            fontSize: "0.85rem", // Further reduced secondary text size
+                                          }}
+                                        />
+                                      </ListItem>
+                                    ))}
+                                </List>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        )}
+                        {userItineraries.find((it) => it.id === viewItineraryId)
+                          .collaborators.length > 0 && (
+                          <Grid item xs={12}>
+                            {" "}
+                            {/* Collaborators Section - Full width on all devices */}
+                            <Card
+                              elevation={2}
+                              sx={{
+                                borderRadius: "10px",
+                                backgroundColor: "#ede7f6",
+                              }}
+                            >
+                              <CardContent
+                                sx={{ padding: { xs: "12px", sm: "16px" } }}
+                              >
+                                {" "}
+                                {/* Responsive padding inside CardContent */}
+                                <Typography
+                                  variant="h6"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    mb: 1.5, // Slightly increased margin bottom
+                                    color: "#455a64",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    fontSize: "1.3rem", // Adjusted section title size
+                                  }}
+                                >
+                                  <ShareIcon sx={{ mr: 1, color: "#9575cd" }} />{" "}
+                                  Collaborators
+                                </Typography>
+                                <List dense>
+                                  {userItineraries
+                                    .find((it) => it.id === viewItineraryId)
+                                    .collaborators.map(
+                                      (collaborator, index) => (
+                                        <ListItem
+                                          key={index}
+                                          disableGutters
+                                          sx={{
+                                            padding: "6px 0",
+                                            borderBottom: "1px dashed #d1c4e9",
+                                          }}
+                                        >
+                                          <ListItemIcon
+                                            sx={{ minWidth: "auto", mr: 1 }}
+                                          >
+                                            <AccountCircleIcon
+                                              sx={{
+                                                color: "#7e57c2",
+                                                fontSize: "1.3rem", // Adjusted icon size
+                                              }}
+                                            />
+                                          </ListItemIcon>
+                                          <ListItemText
+                                            primary={collaborator}
+                                            primaryTypographyProps={{
+                                              variant: "body1",
+                                              color: "#607d8b",
+                                              fontSize: "0.9rem", // Slightly reduced body text size
+                                            }}
+                                          />
+                                        </ListItem>
+                                      )
+                                    )}
+                                </List>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        )}
+                        <Grid item xs={12}>
+                          {" "}
+                          {/* Destinations Section - Full width on all devices */}
+                          <Typography
+                            variant="h5"
+                            sx={{
+                              mt: 3,
+                              fontWeight: "bold",
+                              mb: 2,
+                              color: "#37474f",
+                              display: "flex",
+                              alignItems: "center",
+                              fontSize: "1.6rem", // Adjusted section title size
+                            }}
+                          >
+                            <PinDropIcon
+                              sx={{
+                                mr: 1,
+                                fontSize: "1.6rem", // Adjusted icon size
+                                color: "#f57c00",
+                              }}
+                            />{" "}
+                            Destinations
+                          </Typography>
+                          {userItineraries
+                            .find((it) => it.id === viewItineraryId)
+                            .destinations.map((destination, index) => (
+                              <Card
+                                key={index}
+                                elevation={2}
+                                sx={{
+                                  mb: 2,
+                                  borderRadius: "10px",
+                                  backgroundColor: "#e0f7fa",
+                                }}
+                              >
+                                <CardContent
+                                  sx={{ padding: { xs: "12px", sm: "16px" } }}
+                                >
+                                  {" "}
+                                  {/* Responsive padding inside CardContent */}
+                                  <Typography
+                                    variant="h6"
+                                    component="h3"
+                                    sx={{
+                                      fontWeight: "bold",
+                                      mb: 1,
+                                      color: "#2e7d32",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      fontSize: "1.4rem", // Adjusted destination title size
+                                    }}
+                                  >
+                                    <LocationOnIcon
+                                      sx={{
+                                        mr: 1,
+                                        color: "#4db6ac",
+                                        fontSize: "1.6rem", // Adjusted icon size
+                                      }}
+                                    />{" "}
+                                    {destination.name}
+                                  </Typography>
+                                  <Typography
+                                    variant="subtitle1"
+                                    sx={{
+                                      mb: 1,
+                                      color: "#424242",
+                                      fontSize: "0.9rem", // Slightly reduced subtitle size
+                                    }}
+                                  >
+                                    <CalendarMonthIcon
+                                      sx={{
+                                        mr: 0.5,
+                                        verticalAlign: "middle",
+                                        color: "#4dd0e1",
+                                        fontSize: "1rem", // Adjusted icon size
+                                      }}
+                                    />{" "}
+                                    {moment(destination.startDate).format("LL")}{" "}
+                                    - {moment(destination.endDate).format("LL")}
+                                  </Typography>
+                                  <Grid container spacing={2}>
+                                    {" "}
+                                    {/* Grid for Activities, Expenses, Reminders and Chart */}
+                                    <Grid item xs={12} md={6}>
+                                      {" "}
+                                      {/* Left side for lists - Take full width on small devices, half on medium+ */}
+                                      {destination.activities &&
+                                        destination.activities.length > 0 && (
+                                          <Box
+                                            sx={{
+                                              mt: 1,
+                                              mb: 1,
+                                              borderRadius: "8px",
+                                              padding: "12px",
+                                              backgroundColor: "#e0f7fa",
+                                            }}
+                                          >
+                                            <Typography
+                                              variant="subtitle2"
+                                              sx={{
+                                                fontWeight: "bold",
+                                                mb: 0.5,
+                                                color: "#00796b",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                fontSize: "1rem", // Adjusted subtitle size
+                                              }}
+                                            >
+                                              <DirectionsRunIcon
+                                                sx={{
+                                                  mr: 1,
+                                                  color: "#26a69a",
+                                                  fontSize: "1.3rem", // Adjusted icon size
+                                                }}
+                                              />{" "}
+                                              Activities
+                                            </Typography>
+                                            <List dense sx={{ padding: 0 }}>
+                                              {destination.activities.map(
+                                                (activity, activityIndex) => (
+                                                  <ListItem
+                                                    key={activityIndex}
+                                                    disableGutters
+                                                    sx={{
+                                                      padding: "4px 0",
+                                                      borderBottom:
+                                                        "1px dashed #b2dfdb",
+                                                    }}
+                                                  >
+                                                    <ListItemText
+                                                      primary={`${
+                                                        activity.title
+                                                      } (${activity.type}) - ${
+                                                        activity.time
+                                                          ? moment(
+                                                              activity.time,
+                                                              "HH:mm"
+                                                            ).format("h:mm A")
+                                                          : ""
+                                                      } ${
+                                                        activity.date
+                                                          ? moment(
+                                                              activity.date
+                                                            ).format("LL")
+                                                          : ""
+                                                      } - Cost: ${
+                                                        activity.cost || "N/A"
+                                                      }`}
+                                                      secondary={activity.notes}
+                                                      primaryTypographyProps={{
+                                                        variant: "body2",
+                                                        color: "#424242",
+                                                        fontWeight: "medium",
+                                                        fontSize: "0.85rem", // Further reduced primary text size
+                                                      }}
+                                                      secondaryTypographyProps={{
+                                                        variant: "body2",
+                                                        color: "#616161",
+                                                        fontSize: "0.8rem", // Further reduced secondary text size
+                                                      }}
+                                                    />
+                                                  </ListItem>
+                                                )
+                                              )}
+                                            </List>
+                                          </Box>
+                                        )}
+                                      {destination.expenses &&
+                                        destination.expenses.length > 0 && (
+                                          <Box
+                                            sx={{
+                                              mt: 1,
+                                              mb: 1,
+                                              borderRadius: "8px",
+                                              padding: "12px",
+                                              backgroundColor: "#e0f7fa",
+                                            }}
+                                          >
+                                            <Typography
+                                              variant="subtitle2"
+                                              sx={{
+                                                fontWeight: "bold",
+                                                mb: 0.5,
+                                                color: "#00796b",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                fontSize: "1rem", // Adjusted subtitle size
+                                              }}
+                                            >
+                                              <ShoppingCartIcon
+                                                sx={{
+                                                  mr: 1,
+                                                  color: "#26a69a",
+                                                  fontSize: "1.3rem", // Adjusted icon size
+                                                }}
+                                              />{" "}
+                                              Expenses
+                                            </Typography>
+                                            <List dense sx={{ padding: 0 }}>
+                                              {destination.expenses.map(
+                                                (expense, expenseIndex) => (
+                                                  <ListItem
+                                                    key={expenseIndex}
+                                                    disableGutters
+                                                    sx={{
+                                                      padding: "4px 0",
+                                                      borderBottom:
+                                                        "1px dashed #b2dfdb",
+                                                    }}
+                                                  >
+                                                    <ListItemText
+                                                      primary={`${
+                                                        expense.item
+                                                      } (${
+                                                        expense.category
+                                                      }) - Amount: ${
+                                                        expense.amount
+                                                      } - ${
+                                                        expense.date
+                                                          ? moment(
+                                                              expense.date
+                                                            ).format("LL")
+                                                          : ""
+                                                      } ${
+                                                        expense.time
+                                                          ? moment(
+                                                              expense.time,
+                                                              "HH:mm"
+                                                            ).format("h:mm A")
+                                                          : ""
+                                                      }`}
+                                                      primaryTypographyProps={{
+                                                        variant: "body2",
+                                                        color: "#424242",
+                                                        fontWeight: "medium",
+                                                        fontSize: "0.85rem", // Further reduced primary text size
+                                                      }}
+                                                    />
+                                                  </ListItem>
+                                                )
+                                              )}
+                                            </List>
+                                          </Box>
+                                        )}
+                                      {destination.reminders &&
+                                        destination.reminders.length > 0 && (
+                                          <Box
+                                            sx={{
+                                              mt: 1,
+                                              borderRadius: "8px",
+                                              padding: "12px",
+                                              backgroundColor: "#e0f7fa",
+                                            }}
+                                          >
+                                            <Typography
+                                              variant="subtitle2"
+                                              sx={{
+                                                fontWeight: "bold",
+                                                mb: 0.5,
+                                                color: "#00796b",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                fontSize: "1rem", // Adjusted subtitle size
+                                              }}
+                                            >
+                                              <AlarmIcon
+                                                sx={{
+                                                  mr: 1,
+                                                  color: "#26a69a",
+                                                  fontSize: "1.3rem", // Adjusted icon size
+                                                }}
+                                              />{" "}
+                                              Reminders
+                                            </Typography>
+                                            <List dense sx={{ padding: 0 }}>
+                                              {destination.reminders.map(
+                                                (reminder, reminderIndex) => (
+                                                  <ListItem
+                                                    key={reminderIndex}
+                                                    disableGutters
+                                                    sx={{
+                                                      padding: "4px 0",
+                                                      borderBottom:
+                                                        "1px dashed #b2dfdb",
+                                                    }}
+                                                  >
+                                                    <ListItemText
+                                                      primary={`${
+                                                        reminder.title
+                                                      } (${reminder.type}) - ${
+                                                        reminder.date
+                                                          ? moment(
+                                                              reminder.date
+                                                            ).format("LL")
+                                                          : ""
+                                                      } ${
+                                                        reminder.time
+                                                          ? moment(
+                                                              reminder.time,
+                                                              "HH:mm"
+                                                            ).format("h:mm A")
+                                                          : ""
+                                                      }`}
+                                                      primaryTypographyProps={{
+                                                        variant: "body2",
+                                                        color: "#424242",
+                                                        fontWeight: "medium",
+                                                        fontSize: "0.85rem", // Further reduced primary text size
+                                                      }}
+                                                    />
+                                                  </ListItem>
+                                                )
+                                              )}
+                                            </List>
+                                          </Box>
+                                        )}
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      {" "}
+                                      {/* Right side for Budget Chart - Take full width on small devices, half on medium+ */}
+                                      <Box sx={{ mt: 2 }}>
+                                        {" "}
+                                        {/* Add some top margin to align with lists on the left */}
+                                        <BudgetChart
+                                          expenses={destination.expenses}
+                                          activities={destination.activities}
+                                          budget={
+                                            userItineraries.find(
+                                              (it) => it.id === viewItineraryId
+                                            ).budget
+                                          } // Access budget from itinerary
+                                        />
+                                      </Box>
+                                    </Grid>
+                                  </Grid>
+                                </CardContent>
+                              </Card>
+                            ))}
+                        </Grid>
+                      </Grid>{" "}
+                      {/* End Main Grid Container */}
+                    </Box>
                   )}
               </DialogContent>
-              <DialogActions>
-                <Button onClick={handleCloseViewItinerary} color="primary">
-                  Close
-                </Button>
-              </DialogActions>
             </Dialog>
 
             <Dialog
@@ -1494,7 +2433,7 @@ const ItineraryPlanner = () => {
               <DialogTitle>
                 {editItineraryId ? "Edit Itinerary" : "Create New Itinerary"}
               </DialogTitle>
-              <DialogContent dividers>
+              <DialogContent dividers sx={{ p: 0, m: 0 }}>
                 <Tabs
                   value={activeTab}
                   onChange={(e, newValue) => setActiveTab(newValue)}
@@ -1614,7 +2553,7 @@ const ItineraryPlanner = () => {
                         alignItems="center"
                         mb={2}
                       >
-                        <Typography variant="h6" component="h4">
+                        <Typography sx={{ fontSize: "15px" }} component="h4">
                           Custom Fields
                         </Typography>
                         <Button
@@ -1622,6 +2561,7 @@ const ItineraryPlanner = () => {
                           color="primary"
                           startIcon={<AddIcon />}
                           onClick={handleAddCustomField}
+                          style={{ fontSize: "12px" }}
                         >
                           Add Field
                         </Button>
@@ -1699,7 +2639,7 @@ const ItineraryPlanner = () => {
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
                                     elevation={2}
-                                    sx={{ p: 2, mb: 2 }}
+                                    sx={{ p: 1, mb: 2 }}
                                   >
                                     <Box
                                       {...provided.dragHandleProps}
@@ -1793,7 +2733,7 @@ const ItineraryPlanner = () => {
                                         </Tabs>
                                       </Grid>
 
-                                      <Grid item xs={12}>
+                                      <Grid item md={8} xs={12}>
                                         {destination.activeSubTab ===
                                           0 /* Activities Panel - Same as before */ && (
                                           <Box sx={{ mb: 2 }}>
@@ -2526,7 +3466,8 @@ const ItineraryPlanner = () => {
                                           </Box>
                                         )}
                                       </Grid>
-                                      <Grid item xs={12}>
+
+                                      <Grid item md={4} xs={12}>
                                         <BudgetChart
                                           expenses={destination.expenses}
                                           activities={destination.activities}
