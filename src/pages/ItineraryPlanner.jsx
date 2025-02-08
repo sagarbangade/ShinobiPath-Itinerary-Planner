@@ -1280,7 +1280,7 @@ const ItineraryPlanner = () => {
                                     <Box
                                       sx={{
                                         width: { xs: "100%", sm: "auto" },
-                                        mb: { xs: 2, sm: 0 },
+                                        mb: { xs: 0, sm: 0 },
                                       }}
                                     >
                                       <Typography
@@ -1365,7 +1365,7 @@ const ItineraryPlanner = () => {
                                         color="textSecondary"
                                         sx={{
                                           mt: 0,
-                                          mb: 1,
+                                          mb: 0,
                                           fontSize: "0.95rem",
                                         }} // Adjusted date styling
                                       >
@@ -1376,8 +1376,10 @@ const ItineraryPlanner = () => {
                                         {moment(itinerary.endDate).format("LL")}
                                       </Typography>
 
-                                      {itinerary.destinations.length > 0 && (
-                                        <Box sx={{ mt: 1.5 }}>
+                                      
+                                    </Box>
+                                    {itinerary.destinations.length > 0 && (
+                                        <Box sx={{ mt:0}}>
                                           <Typography
                                             variant="overline" // Overline for "Destinations" label - small caps
                                             sx={{
@@ -1396,7 +1398,7 @@ const ItineraryPlanner = () => {
                                               (destination, index) => (
                                                 <ListItem
                                                   key={index}
-                                                  sx={{ py: 0.3 }}
+                                                  sx={{ py: 0.1 }}
                                                 >
                                                   {" "}
                                                   {/* Reduced vertical padding in list item */}
@@ -1426,7 +1428,6 @@ const ItineraryPlanner = () => {
                                           </List>
                                         </Box>
                                       )}
-                                    </Box>
                                     <Box
                                       display="flex"
                                       sx={{
