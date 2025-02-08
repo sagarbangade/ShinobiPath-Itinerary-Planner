@@ -57,6 +57,11 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  getDoc,
+  setDoc,
+  query,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { db, auth } from "../firebase/firebaseConfig"; // Import your Firebase config
 import { v4 as uuidv4 } from "uuid";
@@ -129,35 +134,117 @@ const ItineraryPlanner = () => {
       return null;
     }
     return collection(db, "users", auth.currentUser.uid, "itineraries");
-  }, [auth.currentUser]);
+  }, []);
 
-  // Fetch itineraries on component mount and when the user changes
-  useEffect(() => {
-    setLoading(true);
-    const itinerariesCollection = getItinerariesCollection();
-    if (!itinerariesCollection) {
-      setLoading(false);
-      setUserItineraries([]);
-      return;
-    }
-    const unsubscribe = onSnapshot(
-      itinerariesCollection,
-      (snapshot) => {
-        const itinerariesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setUserItineraries(itinerariesData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching itineraries:", error);
-        setLoading(false);
+  const getUserIdByEmail = useCallback(async (email) => {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", email));
+    try {
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].id;
       }
+      return null;
+    } catch (error) {
+      console.error("Error getting user ID by email:", error);
+      return null;
+    }
+  }, []);
+
+  const fetchOwnedItineraries = useCallback(async () => {
+    if (!auth.currentUser) return [];
+    const itinerariesCollection = getItinerariesCollection();
+    if (!itinerariesCollection) return [];
+
+    try {
+      const snapshot = await getDocs(itinerariesCollection);
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        isShared: false,
+        ownerId: auth.currentUser.uid,
+      }));
+    } catch (error) {
+      console.error("Error fetching owned itineraries:", error);
+      return [];
+    }
+  }, [getItinerariesCollection]);
+
+  const fetchSharedItineraries = useCallback(async () => {
+    if (!auth.currentUser) return [];
+    const sharedItinerariesRef = collection(db, "sharedItineraries");
+    const q = query(
+      sharedItinerariesRef,
+      where("collaborators", "array-contains", auth.currentUser.uid)
     );
 
-    return () => unsubscribe(); // Cleanup the listener
-  }, [getItinerariesCollection]);
+    try {
+      const querySnapshot = await getDocs(q);
+      const sharedItinerariesData = [];
+
+      for (const docSnap of querySnapshot.docs) {
+        const data = docSnap.data();
+        // Directly fetch itinerary data from the path stored in sharedItineraries
+        const itineraryRef = doc(
+          db,
+          "users",
+          data.ownerId,
+          "itineraries",
+          data.itineraryId
+        );
+        try {
+          const itinerarySnapshot = await getDoc(itineraryRef);
+          if (itinerarySnapshot.exists()) {
+            sharedItinerariesData.push({
+              id: itinerarySnapshot.id,
+              ...itinerarySnapshot.data(),
+              isShared: true,
+              ownerId: data.ownerId,
+            });
+          } else {
+            console.warn(
+              `Itinerary ${data.itineraryId} not found for owner ${data.ownerId}`
+            );
+          }
+        } catch (fetchError) {
+          console.error("Error fetching shared itinerary details:", fetchError);
+        }
+      }
+      return sharedItinerariesData;
+    } catch (error) {
+      console.error("Error fetching shared itineraries metadata:", error);
+      return [];
+    }
+  }, [auth.currentUser]);
+
+  const fetchAllItineraries = useCallback(async () => {
+    if (!auth.currentUser) {
+      setUserItineraries([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const ownedItineraries = await fetchOwnedItineraries();
+      const sharedItineraries = await fetchSharedItineraries();
+      // Combine and remove potential duplicates based on itinerary ID
+      const allItineraries = [...ownedItineraries, ...sharedItineraries];
+      const uniqueItineraries = Array.from(
+        new Map(allItineraries.map((item) => [item.id, item])).values()
+      ); // Deduplicate by ID
+      setUserItineraries(uniqueItineraries);
+    } catch (error) {
+      console.error("Error fetching itineraries:", error);
+      alert("Error fetching itineraries. See console for details.");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchOwnedItineraries, fetchSharedItineraries]);
+
+  useEffect(() => {
+    fetchAllItineraries();
+  }, [fetchAllItineraries]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -179,52 +266,107 @@ const ItineraryPlanner = () => {
   }, [selectedDate, userItineraries, categoryFilter]);
 
   const handleAddItinerary = async () => {
+    console.log("auth.currentUser:", auth.currentUser);
     const errors = validateForm(currentItinerary);
     setFormErrors(errors);
 
     if (Object.keys(errors).length === 0) {
-      const itinerariesCollection = getItinerariesCollection();
-      if (!itinerariesCollection) return;
+      setLoading(true);
 
-      if (editItineraryId) {
-        // Update existing itinerary
-        await updateDoc(
-          doc(
+      try {
+        if (editItineraryId) {
+          // --- UPDATE ---
+          const sharedItineraryRef = collection(db, "sharedItineraries");
+          const sharedQuery = query(
+            sharedItineraryRef,
+            where("itineraryId", "==", editItineraryId)
+          );
+          const sharedSnapshot = await getDocs(sharedQuery);
+          let ownerId;
+          let isSharedItinerary = false;
+          let sharedDocRef;
+
+          if (!sharedSnapshot.empty) {
+            const sharedDoc = sharedSnapshot.docs[0];
+            sharedDocRef = sharedDoc.ref;
+            const sharedData = sharedDoc.data();
+            ownerId = sharedData.ownerId;
+            isSharedItinerary = true;
+
+            if (
+              ownerId !== auth.currentUser.uid &&
+              !sharedData.collaborators.includes(auth.currentUser.uid)
+            ) {
+              alert("You don't have permission to edit this shared itinerary.");
+              setLoading(false);
+              return;
+            }
+
+            const collaboratorUids = await Promise.all(
+              currentItinerary.collaborators.map((email) =>
+                getUserIdByEmail(email)
+              )
+            );
+            const validCollaboratorUids = collaboratorUids.filter(
+              (uid) => uid !== null
+            );
+            await updateDoc(sharedDocRef, {
+              collaborators: validCollaboratorUids,
+            }); // Update shared doc collaborators
+          } else {
+            ownerId = auth.currentUser.uid; // If not shared, owner is current user
+          }
+
+          const itineraryDocRef = doc(
             db,
             "users",
-            auth.currentUser.uid,
+            ownerId,
             "itineraries",
             editItineraryId
-          ),
-          currentItinerary
-        );
-      } else {
-        // Add new itinerary
+          );
+          await updateDoc(itineraryDocRef, currentItinerary);
+        } else {
+          // --- CREATE ---
+          const itinerariesCollection = getItinerariesCollection();
+          if (!itinerariesCollection) return;
 
-        // Prepare the new itinerary, generating IDs where necessary
-        const newItinerary = {
-          ...currentItinerary,
-          destinations: currentItinerary.destinations.map((destination) => ({
-            ...destination,
-            id: uuidv4(),
-            activities: (destination.activities || []).map((activity) => ({
-              ...activity,
+          const newItinerary = {
+            ...currentItinerary,
+            destinations: currentItinerary.destinations.map((destination) => ({
+              ...destination,
               id: uuidv4(),
+              activities: (destination.activities || []).map((activity) => ({
+                ...activity,
+                id: uuidv4(),
+              })),
+              expenses: (destination.expenses || []).map((expense) => ({
+                ...expense,
+                id: uuidv4(),
+              })),
+              reminders: (destination.reminders || []).map((reminder) => ({
+                ...reminder,
+                id: uuidv4(),
+              })),
             })),
-            expenses: (destination.expenses || []).map((expense) => ({
-              ...expense,
-              id: uuidv4(),
-            })),
-            reminders: (destination.reminders || []).map((reminder) => ({
-              ...reminder,
-              id: uuidv4(),
-            })),
-          })),
-        };
+          };
 
-        await addDoc(itinerariesCollection, newItinerary);
+          const docRef = await addDoc(itinerariesCollection, newItinerary);
+          const sharedItinerariesRef = collection(db, "sharedItineraries");
+          await setDoc(doc(sharedItinerariesRef, docRef.id), {
+            itineraryId: docRef.id,
+            ownerId: auth.currentUser.uid,
+            collaborators: [auth.currentUser.uid], // Owner is initial collaborator
+          });
+        }
+
+        resetModal();
+        await fetchAllItineraries();
+      } catch (error) {
+        console.error("Error saving itinerary:", error);
+        alert("Error saving itinerary: " + error.message);
+      } finally {
+        setLoading(false);
       }
-      resetModal();
     }
   };
 
@@ -248,38 +390,93 @@ const ItineraryPlanner = () => {
   };
 
   const handleDeleteItinerary = async (itineraryId) => {
-    await deleteDoc(
-      doc(db, "users", auth.currentUser.uid, "itineraries", itineraryId)
-    );
+    console.log("handleDeleteItinerary - itineraryId:", itineraryId); // Log itinerary ID
+    console.log("handleDeleteItinerary - itinerariesCollection path (getItinerariesCollection()):", getItinerariesCollection()?.path); // Log collection path
+    console.log("handleDeleteItinerary - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    setLoading(true);
+    try {
+      const sharedItineraryRef = collection(db, "sharedItineraries");
+      const sharedQuery = query(
+        sharedItineraryRef,
+        where("itineraryId", "==", itineraryId)
+      );
+      const sharedSnapshot = await getDocs(sharedQuery);
+      let ownerId = auth.currentUser.uid; // Default to current user if not shared.
+
+      if (!sharedSnapshot.empty) {
+        const sharedDoc = sharedSnapshot.docs[0];
+        const sharedData = sharedDoc.data();
+        ownerId = sharedData.ownerId; // Get actual owner id from shared doc
+
+        if (sharedData.ownerId !== auth.currentUser.uid) {
+          alert("Only the owner can delete this shared itinerary.");
+          setLoading(false);
+          return;
+        }
+        await deleteDoc(doc(db, "sharedItineraries", sharedDoc.id)); // Delete shared doc
+      }
+
+      await deleteDoc(doc(db, "users", ownerId, "itineraries", itineraryId)); // Delete itinerary doc
+
+      await fetchAllItineraries();
+    } catch (error) {
+      console.error("Error deleting itinerary:", error);
+      alert("Error deleting itinerary: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const calculateRemaining = useCallback(() => {
-    const totalExpenses = currentItinerary.destinations.reduce(
-      (destSum, destination) =>
-        destSum +
-        destination.expenses.reduce(
-          (expSum, expense) => expSum + parseFloat(expense.amount || 0),
-          0
-        ) +
-        destination.activities.reduce(
-          (actSum, activity) => actSum + parseFloat(activity.cost || 0),
-          0
-        ),
-      0
-    );
-    return (parseFloat(currentItinerary.budget) || 0 - totalExpenses).toFixed(
-      2
-    );
-  }, [currentItinerary]);
 
-  const handleEditItinerary = (itinerary) => {
-    // DEEP COPY using JSON.parse(JSON.stringify(...))
-    const deepCopiedItinerary = JSON.parse(JSON.stringify(itinerary));
 
-    setCurrentItinerary(deepCopiedItinerary);
-    setEditItineraryId(itinerary.id);
-    setOpenModal(true);
-    setFormErrors({});
+  const handleEditItinerary = async (itinerary) => {
+    console.log("handleEditItinerary - itinerary.id:", itinerary.id); // Log itinerary ID
+    console.log("handleEditItinerary - itinerariesCollection path (getItinerariesCollection()):", getItinerariesCollection()?.path); // Log collection path
+    console.log("handleEditItinerary - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    setLoading(true);
+    try {
+      const deepCopiedItinerary = JSON.parse(JSON.stringify(itinerary));
+      if (itinerary.isShared) {
+        const sharedItineraryRef = collection(db, "sharedItineraries");
+        const sharedQuery = query(
+          sharedItineraryRef,
+          where("itineraryId", "==", itinerary.id)
+        );
+        const sharedSnapshot = await getDocs(sharedQuery);
+        if (!sharedSnapshot.empty) {
+          const sharedDoc = sharedSnapshot.docs[0];
+          const sharedData = sharedDoc.data();
+          if (
+            sharedData.ownerId !== itinerary.ownerId &&
+            !sharedData.collaborators.includes(auth.currentUser.uid)
+          ) {
+            alert("You do not have permission to edit this shared itinerary.");
+            setLoading(false);
+            return;
+          }
+          const collaboratorEmails = await Promise.all(
+            sharedData.collaborators.map((uid) => {
+              return getDoc(doc(db, "users", uid)).then((userSnap) =>
+                userSnap.exists() ? userSnap.data().email : null
+              );
+            })
+          );
+          deepCopiedItinerary.collaborators = collaboratorEmails.filter(
+            (email) => email != null
+          );
+        }
+      }
+
+      setCurrentItinerary(deepCopiedItinerary);
+      setEditItineraryId(itinerary.id);
+      setOpenModal(true);
+      setFormErrors({});
+    } catch (error) {
+      console.error("Error preparing to edit itinerary:", error);
+      alert("Error preparing to edit itinerary: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetModal = () => {
@@ -330,7 +527,6 @@ const ItineraryPlanner = () => {
 
     const { source, destination } = result;
 
-    // Dragging destinations
     if (source.droppableId === "destinations") {
       setCurrentItinerary((prev) => {
         const reorderedDestinations = [...prev.destinations];
@@ -343,7 +539,6 @@ const ItineraryPlanner = () => {
       });
     }
 
-    // Dragging within a destination (activities, expenses, reminders)
     if (source.droppableId.startsWith("destination-")) {
       const [, destinationIndexStr, type] = source.droppableId.split("-");
       const destinationIndex = parseInt(destinationIndexStr, 10);
@@ -365,7 +560,6 @@ const ItineraryPlanner = () => {
       });
     }
 
-    //Dragging Itineraries
     if (source.droppableId === "itineraries") {
       const reorderedItineraries = Array.from(userItineraries);
       const [reorderedItem] = reorderedItineraries.splice(source.index, 1);
@@ -374,14 +568,24 @@ const ItineraryPlanner = () => {
     }
   };
 
-  // Handles changes of particular field in sub-objects
   const handleInputChange = (destinationIndex, tab, index, field, value) => {
     setCurrentItinerary((prev) => {
       const updatedDestinations = [...prev.destinations];
       const destination = updatedDestinations[destinationIndex];
-
       const updatedTabItems = [...(destination[tab] || [])];
-      updatedTabItems[index] = { ...updatedTabItems[index], [field]: value };
+
+      let updatedValue = value;
+      if (
+        (tab === "activities" && field === "cost") ||
+        (tab === "expenses" && field === "amount")
+      ) {
+        updatedValue = isNaN(parseFloat(value)) ? "" : parseFloat(value);
+      }
+
+      updatedTabItems[index] = {
+        ...updatedTabItems[index],
+        [field]: updatedValue,
+      };
 
       updatedDestinations[destinationIndex] = {
         ...destination,
@@ -413,20 +617,18 @@ const ItineraryPlanner = () => {
 
   const handleAddActivity = (destinationIndex) => {
     setCurrentItinerary((prev) => {
-      const updatedDestinations = [...prev.destinations]; // Copy the destinations array
+      const updatedDestinations = [...prev.destinations];
       const newActivity = {
-        // Create a *new* activity object
         id: uuidv4(),
         title: "",
         time: "",
+        date: "",
         type: "sightseeing",
         cost: "",
         notes: "",
       };
-
-      // Use concat to create a *new* activities array
       updatedDestinations[destinationIndex] = {
-        ...updatedDestinations[destinationIndex], // Copy the destination
+        ...updatedDestinations[destinationIndex],
         activities: [
           ...(updatedDestinations[destinationIndex].activities || []),
           newActivity,
@@ -445,6 +647,7 @@ const ItineraryPlanner = () => {
         amount: "",
         category: "transportation",
         date: "",
+        time: "",
       };
       updatedDestinations[destinationIndex] = {
         ...updatedDestinations[destinationIndex],
@@ -477,55 +680,164 @@ const ItineraryPlanner = () => {
       return { ...prev, destinations: updatedDestinations };
     });
   };
+
   const handleDeleteDestination = (destinationIndex) => {
+    console.log("auth.currentUser:", auth.currentUser);
     setCurrentItinerary((prev) => ({
       ...prev,
-      destinations: prev.destinations.filter((_, i) => i !== destinationIndex), // Correct - filter creates a new array
+      destinations: prev.destinations.filter((_, i) => i !== destinationIndex),
     }));
   };
 
   const handleDeleteItem = (destinationIndex, tab, index) => {
     setCurrentItinerary((prev) => {
-      const updatedDestinations = [...prev.destinations]; // Copy destinations
-      const updatedItems = [
-        ...(updatedDestinations[destinationIndex][tab] || []),
-      ]; // Copy the specific tab's array (activities, expenses, etc.)
-
-      // Use filter to create a *new* array without the deleted item
+      const updatedDestinations = [...prev.destinations];
       updatedDestinations[destinationIndex] = {
-        ...updatedDestinations[destinationIndex], // Copy destination
-        [tab]: updatedItems.filter((_, i) => i !== index), // Filter creates a new array
+        ...updatedDestinations[destinationIndex],
+        [tab]: updatedDestinations[destinationIndex][tab].filter(
+          (_, i) => i !== index
+        ),
       };
       return { ...prev, destinations: updatedDestinations };
     });
   };
 
-  const handleAddCollaborator = () => {
-    if (
-      newCollaboratorEmail &&
-      !currentItinerary.collaborators.includes(newCollaboratorEmail) &&
-      isValidEmail(newCollaboratorEmail)
-    ) {
+  const handleAddCollaborator = async () => {
+    console.log("auth.currentUser:", auth.currentUser);
+    console.log("handleAddCollaborator - editItineraryId:", editItineraryId); // Log itinerary ID
+    // console.log("handleAddCollaborator - sharedItinerariesRef path:", sharedItinerariesRef.path); // Log collection path
+    console.log("handleAddCollaborator - auth.currentUser.uid:", auth.currentUser.uid); // Log user UID
+    if (!newCollaboratorEmail) {
+      alert("Please enter an email address.");
+      return;
+    }
+    if (!isValidEmail(newCollaboratorEmail)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    if (newCollaboratorEmail === auth.currentUser.email) {
+      alert("You cannot add yourself as a collaborator.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const collaboratorUid = await getUserIdByEmail(newCollaboratorEmail);
+      if (!collaboratorUid) {
+        alert("No user found with that email address.");
+        setLoading(false);
+        return;
+      }
+
+      const sharedItinerariesRef = collection(db, "sharedItineraries");
+      const sharedDocQuery = query(
+        sharedItinerariesRef,
+        where("itineraryId", "==", editItineraryId)
+      );
+      const sharedDocSnapshot = await getDocs(sharedDocQuery);
+
+      if (sharedDocSnapshot.empty) {
+        alert("Itinerary sharing information not found.");
+        setLoading(false);
+        return;
+      }
+
+      const sharedDoc = sharedDocSnapshot.docs[0];
+      const sharedData = sharedDoc.data();
+
+      if (auth.currentUser.uid !== sharedData.ownerId) {
+        alert("Only the owner can add collaborators.");
+        setLoading(false);
+        return;
+      }
+      if (sharedData.collaborators.includes(collaboratorUid)) {
+        alert("User is already a collaborator.");
+        setLoading(false);
+        return;
+      }
+
+      const updatedCollaborators = [
+        ...sharedData.collaborators,
+        collaboratorUid,
+      ];
+      await updateDoc(sharedDoc.ref, { collaborators: updatedCollaborators });
+
       setCurrentItinerary((prev) => ({
         ...prev,
         collaborators: [...prev.collaborators, newCollaboratorEmail],
       }));
       setNewCollaboratorEmail("");
-    } else if (
-      newCollaboratorEmail &&
-      currentItinerary.collaborators.includes(newCollaboratorEmail)
-    ) {
-      alert("Collaborator already added");
-    } else if (newCollaboratorEmail && !isValidEmail(newCollaboratorEmail)) {
-      alert("Please enter a valid email.");
+      alert("Collaborator added successfully!");
+      await fetchAllItineraries();
+    } catch (error) {
+      console.error("Error adding collaborator:", error);
+      alert("Error adding collaborator: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemoveCollaborator = (index) => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      collaborators: prev.collaborators.filter((_, i) => i !== index),
-    }));
+  const handleRemoveCollaborator = async (collaboratorEmail) => {
+    setLoading(true);
+    try {
+      const collaboratorUid = await getUserIdByEmail(collaboratorEmail);
+      if (!collaboratorUid) {
+        alert("No user found with that email address.");
+        setLoading(false);
+        return;
+      }
+
+      const sharedItinerariesRef = collection(db, "sharedItineraries");
+      const sharedDocQuery = query(
+        sharedItinerariesRef,
+        where("itineraryId", "==", editItineraryId)
+      );
+      const sharedDocSnapshot = await getDocs(sharedDocQuery);
+
+      if (sharedDocSnapshot.empty) {
+        console.log("Shared itinerary document not found.");
+        setLoading(false);
+        return;
+      }
+      const sharedDoc = sharedDocSnapshot.docs[0];
+      const sharedData = sharedDoc.data();
+
+      if (auth.currentUser.uid !== sharedData.ownerId) {
+        alert("Only the owner can remove collaborators.");
+        setLoading(false);
+        return;
+      }
+      if (
+        sharedData.collaborators.length <= 1 &&
+        sharedData.collaborators.includes(collaboratorUid) &&
+        sharedData.ownerId === auth.currentUser.uid
+      ) {
+        alert(
+          "Owner cannot remove themselves if they are the only collaborator."
+        );
+        setLoading(false);
+        return;
+      }
+
+      const updatedCollaborators = sharedData.collaborators.filter(
+        (uid) => uid !== collaboratorUid
+      );
+      await updateDoc(sharedDoc.ref, { collaborators: updatedCollaborators });
+
+      setCurrentItinerary((prev) => ({
+        ...prev,
+        collaborators: prev.collaborators.filter(
+          (email) => email !== collaboratorEmail
+        ),
+      }));
+
+      await fetchAllItineraries();
+    } catch (error) {
+      console.error("Error removing collaborator:", error);
+      alert("Error removing collaborator: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleViewItinerary = (itineraryId) => setViewItineraryId(itineraryId);
@@ -576,10 +888,7 @@ const ItineraryPlanner = () => {
   };
 
   const handleItineraryInputChange = (field, value) => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setCurrentItinerary((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -594,7 +903,7 @@ const ItineraryPlanner = () => {
           fontFamily: "Arial, sans-serif",
         }}
       >
-        <Box sx={{ maxWidth: "1280px", mx: "auto", height: "100vh" }}>
+        <Box sx={{ maxWidth: "1280px", mx: "auto" }}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Box
@@ -980,6 +1289,7 @@ const ItineraryPlanner = () => {
                 </Tabs>
 
                 <TabPanel value={activeTab} index={0}>
+                  {/* Basic Info Form - Same as before */}
                   <Grid container spacing={3}>
                     <Grid item xs={12} sm={6}>
                       <TextField
@@ -1139,6 +1449,7 @@ const ItineraryPlanner = () => {
                 </TabPanel>
 
                 <TabPanel value={activeTab} index={1}>
+                  {/* Destinations Tab - Same as before */}
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
@@ -1147,284 +1458,60 @@ const ItineraryPlanner = () => {
                   >
                     Add Destination
                   </Button>
-                  {currentItinerary.destinations.map(
-                    (destination, destinationIndex) => (
-                      <Card
-                        key={destination.id}
-                        elevation={2}
-                        sx={{ p: 2, mb: 2 }}
-                      >
+                  <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="destinations">
+                      {(provided) => (
                         <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            mb: 1,
-                          }}
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
                         >
-                          <Typography variant="h6">
-                            Destination {destinationIndex + 1}
-                          </Typography>
-                          <IconButton
-                            color="error"
-                            onClick={() =>
-                              handleDeleteDestination(destinationIndex)
-                            }
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6}>
-                            <TextField
-                              label="Destination Name"
-                              fullWidth
-                              value={destination.name}
-                              onChange={(e) =>
-                                handleDestinationChange(
-                                  destinationIndex,
-                                  "name",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField
-                              label="Start Date"
-                              type="date"
-                              fullWidth
-                              InputLabelProps={{ shrink: true }}
-                              value={destination.startDate}
-                              onChange={(e) =>
-                                handleDestinationChange(
-                                  destinationIndex,
-                                  "startDate",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField
-                              label="End Date"
-                              type="date"
-                              fullWidth
-                              InputLabelProps={{ shrink: true }}
-                              value={destination.endDate}
-                              onChange={(e) =>
-                                handleDestinationChange(
-                                  destinationIndex,
-                                  "endDate",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </Grid>
-
-                          <Grid item xs={12}>
-                            <Tabs
-                              value={destination.activeSubTab || 0} // Use a local subtab value
-                              onChange={(e, newValue) =>
-                                handleDestinationChange(
-                                  destinationIndex,
-                                  "activeSubTab",
-                                  newValue
-                                )
-                              } // and onChange
-                              variant="scrollable"
-                              scrollButtons="auto"
-                              allowScrollButtonsMobile
-                              sx={{ mb: 2 }}
-                            >
-                              <Tab label="Activities" />
-                              <Tab label="Expenses" />
-                              <Tab label="Reminders" />
-                            </Tabs>
-                          </Grid>
-
-                          <Grid item xs={12}>
-                            {/* Activities Panel */}
-                            {destination.activeSubTab === 0 && (
-                              <Box sx={{ mb: 2 }}>
-                                <Button
-                                  variant="outlined"
-                                  onClick={() =>
-                                    handleAddActivity(destinationIndex)
-                                  }
-                                  startIcon={<AddIcon />}
-                                >
-                                  Add Activity
-                                </Button>
-                                {destination.activities.map(
-                                  (activity, index) => (
-                                    <Card
-                                      key={activity.id}
-                                      elevation={1}
-                                      sx={{ p: 1, mb: 1 }}
-                                    >
-                                      <Grid container spacing={1}>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Activity Title"
-                                            size="small"
-                                            fullWidth
-                                            value={activity.title}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "activities",
-                                                index,
-                                                "title",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Time"
-                                            type="time"
-                                            size="small"
-                                            fullWidth
-                                            InputLabelProps={{
-                                              shrink: true,
-                                            }}
-                                            value={activity.time}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "activities",
-                                                index,
-                                                "time",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <FormControl fullWidth size="small">
-                                            <InputLabel>Type</InputLabel>
-                                            <Select
-                                              value={activity.type}
-                                              label="Type"
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  destinationIndex,
-                                                  "activities",
-                                                  index,
-                                                  "type",
-                                                  e.target.value
-                                                )
-                                              }
-                                            >
-                                              {ACTIVITY_TYPES.map((type) => (
-                                                <MenuItem
-                                                  key={type}
-                                                  value={type}
-                                                >
-                                                  {type}
-                                                </MenuItem>
-                                              ))}
-                                            </Select>
-                                          </FormControl>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Cost"
-                                            type="number"
-                                            size="small"
-                                            fullWidth
-                                            value={activity.cost}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "activities",
-                                                index,
-                                                "cost",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                          <TextField
-                                            label="Notes"
-                                            size="small"
-                                            fullWidth
-                                            multiline
-                                            rows={2}
-                                            value={activity.notes}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "activities",
-                                                index,
-                                                "notes",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid
-                                          item
-                                          xs={12}
-                                          sx={{
-                                            textAlign: "right",
-                                          }}
-                                        >
-                                          <IconButton
-                                            color="error"
-                                            size="small"
-                                            onClick={() =>
-                                              handleDeleteItem(
-                                                destinationIndex,
-                                                "activities",
-                                                index
-                                              )
-                                            }
-                                          >
-                                            <DeleteIcon />
-                                          </IconButton>
-                                        </Grid>
-                                      </Grid>
-                                    </Card>
-                                  )
-                                )}
-                              </Box>
-                            )}
-
-                            {/* Expenses Panel */}
-                            {destination.activeSubTab === 1 && (
-                              <Box sx={{ mb: 2 }}>
-                                <Button
-                                  variant="outlined"
-                                  onClick={() =>
-                                    handleAddExpense(destinationIndex)
-                                  }
-                                  startIcon={<AddIcon />}
-                                >
-                                  Add Expense
-                                </Button>
-                                {destination.expenses.map((expense, index) => (
+                          {currentItinerary.destinations.map(
+                            (destination, destinationIndex) => (
+                              <Draggable
+                                key={destination.id}
+                                draggableId={destination.id}
+                                index={destinationIndex}
+                              >
+                                {(provided) => (
                                   <Card
-                                    key={expense.id}
-                                    elevation={1}
-                                    sx={{ p: 1, mb: 1 }}
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    elevation={2}
+                                    sx={{ p: 2, mb: 2 }}
                                   >
-                                    <Grid container spacing={1}>
+                                    <Box
+                                      {...provided.dragHandleProps}
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        mb: 1,
+                                      }}
+                                    >
+                                      <Typography variant="h6">
+                                        Destination {destinationIndex + 1}
+                                      </Typography>
+                                      <IconButton
+                                        color="error"
+                                        onClick={() =>
+                                          handleDeleteDestination(
+                                            destinationIndex
+                                          )
+                                        }
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Box>
+                                    <Grid container spacing={2}>
                                       <Grid item xs={12} sm={6}>
                                         <TextField
-                                          label="Item"
+                                          label="Destination Name"
                                           fullWidth
-                                          size="small"
-                                          value={expense.item}
+                                          value={destination.name}
                                           onChange={(e) =>
-                                            handleInputChange(
+                                            handleDestinationChange(
                                               destinationIndex,
-                                              "expenses",
-                                              index,
-                                              "item",
+                                              "name",
                                               e.target.value
                                             )
                                           }
@@ -1432,247 +1519,813 @@ const ItineraryPlanner = () => {
                                       </Grid>
                                       <Grid item xs={12} sm={6}>
                                         <TextField
-                                          label="Amount"
-                                          type="number"
-                                          size="small"
-                                          fullWidth
-                                          value={expense.amount}
-                                          onChange={(e) =>
-                                            handleInputChange(
-                                              destinationIndex,
-                                              "expenses",
-                                              index,
-                                              "amount",
-                                              e.target.value
-                                            )
-                                          }
-                                        />
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <FormControl fullWidth size="small">
-                                          <InputLabel>Category</InputLabel>
-                                          <Select
-                                            value={expense.category}
-                                            label="Category"
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "expenses",
-                                                index,
-                                                "category",
-                                                e.target.value
-                                              )
-                                            }
-                                          >
-                                            {EXPENSE_CATEGORIES.map(
-                                              (category) => (
-                                                <MenuItem
-                                                  key={category}
-                                                  value={category}
-                                                >
-                                                  {category}
-                                                </MenuItem>
-                                              )
-                                            )}
-                                          </Select>
-                                        </FormControl>
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="Date"
-                                          size="small"
+                                          label="Start Date"
                                           type="date"
                                           fullWidth
-                                          InputLabelProps={{
-                                            shrink: true,
-                                          }}
-                                          value={expense.date}
+                                          InputLabelProps={{ shrink: true }}
+                                          value={destination.startDate}
                                           onChange={(e) =>
-                                            handleInputChange(
+                                            handleDestinationChange(
                                               destinationIndex,
-                                              "expenses",
-                                              index,
-                                              "date",
+                                              "startDate",
                                               e.target.value
                                             )
                                           }
                                         />
                                       </Grid>
-                                      <Grid
-                                        item
-                                        xs={12}
-                                        sx={{
-                                          textAlign: "right",
-                                        }}
-                                      >
-                                        <IconButton
-                                          color="error"
-                                          size="small"
-                                          onClick={() =>
-                                            handleDeleteItem(
+                                      <Grid item xs={12} sm={6}>
+                                        <TextField
+                                          label="End Date"
+                                          type="date"
+                                          fullWidth
+                                          InputLabelProps={{ shrink: true }}
+                                          value={destination.endDate}
+                                          onChange={(e) =>
+                                            handleDestinationChange(
                                               destinationIndex,
-                                              "expenses",
-                                              index
+                                              "endDate",
+                                              e.target.value
                                             )
                                           }
+                                        />
+                                      </Grid>
+
+                                      <Grid item xs={12}>
+                                        <Tabs
+                                          value={destination.activeSubTab || 0}
+                                          onChange={(e, newValue) =>
+                                            handleDestinationChange(
+                                              destinationIndex,
+                                              "activeSubTab",
+                                              newValue
+                                            )
+                                          }
+                                          variant="scrollable"
+                                          scrollButtons="auto"
+                                          allowScrollButtonsMobile
+                                          sx={{ mb: 2 }}
                                         >
-                                          <DeleteIcon />
-                                        </IconButton>
+                                          <Tab label="Activities" />
+                                          <Tab label="Expenses" />
+                                          <Tab label="Reminders" />
+                                        </Tabs>
+                                      </Grid>
+
+                                      <Grid item xs={12}>
+                                        {destination.activeSubTab ===
+                                          0 /* Activities Panel - Same as before */ && (
+                                          <Box sx={{ mb: 2 }}>
+                                            <Button
+                                              variant="outlined"
+                                              onClick={() =>
+                                                handleAddActivity(
+                                                  destinationIndex
+                                                )
+                                              }
+                                              startIcon={<AddIcon />}
+                                            >
+                                              Add Activity
+                                            </Button>
+                                            <Droppable
+                                              droppableId={`destination-${destinationIndex}-activity`}
+                                            >
+                                              {(provided) => (
+                                                <Box
+                                                  {...provided.droppableProps}
+                                                  ref={provided.innerRef}
+                                                  sx={{ mb: 2 }}
+                                                >
+                                                  {destination.activities.map(
+                                                    (activity, index) => (
+                                                      <Draggable
+                                                        key={activity.id}
+                                                        draggableId={
+                                                          activity.id
+                                                        }
+                                                        index={index}
+                                                      >
+                                                        {(provided) => (
+                                                          <Card
+                                                            ref={
+                                                              provided.innerRef
+                                                            }
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+                                                            elevation={1}
+                                                            sx={{ p: 1, mb: 1 }}
+                                                          >
+                                                            {/* Activity Form Fields - Same as before */}
+                                                            <Grid
+                                                              container
+                                                              spacing={1}
+                                                            >
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Activity Title"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  value={
+                                                                    activity.title
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index,
+                                                                      "title",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Date"
+                                                                  type="date"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    activity.date
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index,
+                                                                      "date",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Time"
+                                                                  type="time"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    activity.time
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index,
+                                                                      "time",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <FormControl
+                                                                  fullWidth
+                                                                  size="small"
+                                                                >
+                                                                  <InputLabel>
+                                                                    Type
+                                                                  </InputLabel>
+                                                                  <Select
+                                                                    value={
+                                                                      activity.type
+                                                                    }
+                                                                    label="Type"
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index,
+                                                                        "type",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    {ACTIVITY_TYPES.map(
+                                                                      (
+                                                                        type
+                                                                      ) => (
+                                                                        <MenuItem
+                                                                          key={
+                                                                            type
+                                                                          }
+                                                                          value={
+                                                                            type
+                                                                          }
+                                                                        >
+                                                                          {type}
+                                                                        </MenuItem>
+                                                                      )
+                                                                    )}
+                                                                  </Select>
+                                                                </FormControl>
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Cost"
+                                                                  type="number"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  value={
+                                                                    activity.cost
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index,
+                                                                      "cost",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                              >
+                                                                <TextField
+                                                                  label="Notes"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  multiline
+                                                                  rows={2}
+                                                                  value={
+                                                                    activity.notes
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index,
+                                                                      "notes",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sx={{
+                                                                  textAlign:
+                                                                    "right",
+                                                                }}
+                                                              >
+                                                                <IconButton
+                                                                  color="error"
+                                                                  size="small"
+                                                                  onClick={() =>
+                                                                    handleDeleteItem(
+                                                                      destinationIndex,
+                                                                      "activities",
+                                                                      index
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <DeleteIcon />
+                                                                </IconButton>
+                                                              </Grid>
+                                                            </Grid>
+                                                          </Card>
+                                                        )}
+                                                      </Draggable>
+                                                    )
+                                                  )}
+                                                  {provided.placeholder}
+                                                </Box>
+                                              )}
+                                            </Droppable>
+                                          </Box>
+                                        )}
+
+                                        {destination.activeSubTab ===
+                                          1 /* Expenses Panel - Same as before */ && (
+                                          <Box sx={{ mb: 2 }}>
+                                            <Button
+                                              variant="outlined"
+                                              onClick={() =>
+                                                handleAddExpense(
+                                                  destinationIndex
+                                                )
+                                              }
+                                              startIcon={<AddIcon />}
+                                            >
+                                              Add Expense
+                                            </Button>
+                                            <Droppable
+                                              droppableId={`destination-${destinationIndex}-expense`}
+                                            >
+                                              {(provided) => (
+                                                <Box
+                                                  {...provided.droppableProps}
+                                                  ref={provided.innerRef}
+                                                  sx={{ mb: 2 }}
+                                                >
+                                                  {destination.expenses.map(
+                                                    (expense, index) => (
+                                                      <Draggable
+                                                        key={expense.id}
+                                                        draggableId={expense.id}
+                                                        index={index}
+                                                      >
+                                                        {(provided) => (
+                                                          <Card
+                                                            ref={
+                                                              provided.innerRef
+                                                            }
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+                                                            elevation={1}
+                                                            sx={{ p: 1, mb: 1 }}
+                                                          >
+                                                            {/* Expense Form Fields - Same as before */}
+                                                            <Grid
+                                                              container
+                                                              spacing={1}
+                                                            >
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Item"
+                                                                  fullWidth
+                                                                  size="small"
+                                                                  value={
+                                                                    expense.item
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "expenses",
+                                                                      index,
+                                                                      "item",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Amount"
+                                                                  type="number"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  value={
+                                                                    expense.amount
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "expenses",
+                                                                      index,
+                                                                      "amount",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <FormControl
+                                                                  fullWidth
+                                                                  size="small"
+                                                                >
+                                                                  <InputLabel>
+                                                                    Category
+                                                                  </InputLabel>
+                                                                  <Select
+                                                                    value={
+                                                                      expense.category
+                                                                    }
+                                                                    label="Category"
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "expenses",
+                                                                        index,
+                                                                        "category",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    {EXPENSE_CATEGORIES.map(
+                                                                      (
+                                                                        category
+                                                                      ) => (
+                                                                        <MenuItem
+                                                                          key={
+                                                                            category
+                                                                          }
+                                                                          value={
+                                                                            category
+                                                                          }
+                                                                        >
+                                                                          {
+                                                                            category
+                                                                          }
+                                                                        </MenuItem>
+                                                                      )
+                                                                    )}
+                                                                  </Select>
+                                                                </FormControl>
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Date"
+                                                                  size="small"
+                                                                  type="date"
+                                                                  fullWidth
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    expense.date
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "expenses",
+                                                                      index,
+                                                                      "date",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Time"
+                                                                  type="time"
+                                                                  size="small"
+                                                                  fullWidth
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    expense.time
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "expenses",
+                                                                      index,
+                                                                      "time",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sx={{
+                                                                  textAlign:
+                                                                    "right",
+                                                                }}
+                                                              >
+                                                                <IconButton
+                                                                  color="error"
+                                                                  size="small"
+                                                                  onClick={() =>
+                                                                    handleDeleteItem(
+                                                                      destinationIndex,
+                                                                      "expenses",
+                                                                      index
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <DeleteIcon />
+                                                                </IconButton>
+                                                              </Grid>
+                                                            </Grid>
+                                                          </Card>
+                                                        )}
+                                                      </Draggable>
+                                                    )
+                                                  )}
+                                                  {provided.placeholder}
+                                                </Box>
+                                              )}
+                                            </Droppable>
+                                          </Box>
+                                        )}
+
+                                        {destination.activeSubTab ===
+                                          2 /* Reminders Panel - Same as before */ && (
+                                          <Box sx={{ mb: 2 }}>
+                                            <Button
+                                              variant="outlined"
+                                              onClick={() =>
+                                                handleAddReminder(
+                                                  destinationIndex
+                                                )
+                                              }
+                                              startIcon={<AddIcon />}
+                                            >
+                                              Add Reminder
+                                            </Button>
+                                            <Droppable
+                                              droppableId={`destination-${destinationIndex}-reminder`}
+                                            >
+                                              {(provided) => (
+                                                <Box
+                                                  {...provided.droppableProps}
+                                                  ref={provided.innerRef}
+                                                  sx={{ mb: 2 }}
+                                                >
+                                                  {destination.reminders.map(
+                                                    (reminder, index) => (
+                                                      <Draggable
+                                                        key={reminder.id}
+                                                        draggableId={
+                                                          reminder.id
+                                                        }
+                                                        index={index}
+                                                      >
+                                                        {(provided) => (
+                                                          <Card
+                                                            ref={
+                                                              provided.innerRef
+                                                            }
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+                                                            elevation={1}
+                                                            sx={{ p: 1, mb: 1 }}
+                                                          >
+                                                            {/* Reminder Form Fields - Same as before */}
+                                                            <Grid
+                                                              container
+                                                              spacing={1}
+                                                            >
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Reminder Title"
+                                                                  fullWidth
+                                                                  size="small"
+                                                                  value={
+                                                                    reminder.title
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "reminders",
+                                                                      index,
+                                                                      "title",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <FormControl
+                                                                  fullWidth
+                                                                  size="small"
+                                                                >
+                                                                  <InputLabel>
+                                                                    Type
+                                                                  </InputLabel>
+                                                                  <Select
+                                                                    value={
+                                                                      reminder.type
+                                                                    }
+                                                                    label="Type"
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "reminders",
+                                                                        index,
+                                                                        "type",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    {REMINDER_TYPES.map(
+                                                                      (
+                                                                        type
+                                                                      ) => (
+                                                                        <MenuItem
+                                                                          key={
+                                                                            type
+                                                                          }
+                                                                          value={
+                                                                            type
+                                                                          }
+                                                                        >
+                                                                          {type}
+                                                                        </MenuItem>
+                                                                      )
+                                                                    )}
+                                                                  </Select>
+                                                                </FormControl>
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Date"
+                                                                  type="date"
+                                                                  fullWidth
+                                                                  size="small"
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    reminder.date
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "reminders",
+                                                                      index,
+                                                                      "date",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sm={6}
+                                                              >
+                                                                <TextField
+                                                                  label="Time"
+                                                                  type="time"
+                                                                  fullWidth
+                                                                  size="small"
+                                                                  InputLabelProps={{
+                                                                    shrink: true,
+                                                                  }}
+                                                                  value={
+                                                                    reminder.time
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    handleInputChange(
+                                                                      destinationIndex,
+                                                                      "reminders",
+                                                                      index,
+                                                                      "time",
+                                                                      e.target
+                                                                        .value
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </Grid>
+                                                              <Grid
+                                                                item
+                                                                xs={12}
+                                                                sx={{
+                                                                  textAlign:
+                                                                    "right",
+                                                                }}
+                                                              >
+                                                                <IconButton
+                                                                  color="error"
+                                                                  size="small"
+                                                                  onClick={() =>
+                                                                    handleDeleteItem(
+                                                                      destinationIndex,
+                                                                      "reminders",
+                                                                      index
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <DeleteIcon />
+                                                                </IconButton>
+                                                              </Grid>
+                                                            </Grid>
+                                                          </Card>
+                                                        )}
+                                                      </Draggable>
+                                                    )
+                                                  )}
+                                                  {provided.placeholder}
+                                                </Box>
+                                              )}
+                                            </Droppable>
+                                          </Box>
+                                        )}
+                                      </Grid>
+                                      <Grid item xs={12}>
+                                        <BudgetChart
+                                          expenses={destination.expenses}
+                                          activities={destination.activities}
+                                          budget={currentItinerary.budget}
+                                        />
                                       </Grid>
                                     </Grid>
                                   </Card>
-                                ))}
-                              </Box>
-                            )}
-
-                            {/* Reminders Panel */}
-                            {destination.activeSubTab === 2 && (
-                              <Box sx={{ mb: 2 }}>
-                                <Button
-                                  variant="outlined"
-                                  onClick={() =>
-                                    handleAddReminder(destinationIndex)
-                                  }
-                                  startIcon={<AddIcon />}
-                                >
-                                  Add Reminder
-                                </Button>
-
-                                {destination.reminders.map(
-                                  (reminder, index) => (
-                                    <Card
-                                      key={reminder.id}
-                                      elevation={1}
-                                      sx={{ p: 1, mb: 1 }}
-                                    >
-                                      <Grid container spacing={1}>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Reminder Title"
-                                            fullWidth
-                                            size="small"
-                                            value={reminder.title}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "reminders",
-                                                index,
-                                                "title",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <FormControl fullWidth size="small">
-                                            <InputLabel>Type</InputLabel>
-                                            <Select
-                                              value={reminder.type}
-                                              label="Type"
-                                              onChange={(e) =>
-                                                handleInputChange(
-                                                  destinationIndex,
-                                                  "reminders",
-                                                  index,
-                                                  "type",
-                                                  e.target.value
-                                                )
-                                              }
-                                            >
-                                              {REMINDER_TYPES.map((type) => (
-                                                <MenuItem
-                                                  key={type}
-                                                  value={type}
-                                                >
-                                                  {type}
-                                                </MenuItem>
-                                              ))}
-                                            </Select>
-                                          </FormControl>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Date"
-                                            type="date"
-                                            fullWidth
-                                            size="small"
-                                            InputLabelProps={{
-                                              shrink: true,
-                                            }}
-                                            value={reminder.date}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "reminders",
-                                                index,
-                                                "date",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <TextField
-                                            label="Time"
-                                            type="time"
-                                            fullWidth
-                                            size="small"
-                                            InputLabelProps={{
-                                              shrink: true,
-                                            }}
-                                            value={reminder.time}
-                                            onChange={(e) =>
-                                              handleInputChange(
-                                                destinationIndex,
-                                                "reminders",
-                                                index,
-                                                "time",
-                                                e.target.value
-                                              )
-                                            }
-                                          />
-                                        </Grid>
-                                        <Grid
-                                          item
-                                          xs={12}
-                                          sx={{
-                                            textAlign: "right",
-                                          }}
-                                        >
-                                          <IconButton
-                                            color="error"
-                                            size="small"
-                                            onClick={() =>
-                                              handleDeleteItem(
-                                                destinationIndex,
-                                                "reminders",
-                                                index
-                                              )
-                                            }
-                                          >
-                                            <DeleteIcon />
-                                          </IconButton>
-                                        </Grid>
-                                      </Grid>
-                                    </Card>
-                                  )
                                 )}
-                              </Box>
-                            )}
-                          </Grid>
-                          <Grid item xs={12}>
-                            <BudgetChart
-                              expenses={destination.expenses}
-                              budget={currentItinerary.budget}
-                            />
-                          </Grid>
-                        </Grid>
-                      </Card>
-                    )
-                  )}
+                              </Draggable>
+                            )
+                          )}
+                          {provided.placeholder}
+                        </Box>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 </TabPanel>
 
                 <TabPanel value={activeTab} index={2}>
+                  {/* Sharing Tab - Same as before, but ensure collaborator logic uses UIDs internally */}
                   <Grid container spacing={3}>
                     <Grid item xs={12}>
                       <FormControlLabel
@@ -1727,7 +2380,9 @@ const ItineraryPlanner = () => {
                               <Chip
                                 key={index}
                                 label={collaborator}
-                                onDelete={() => handleRemoveCollaborator(index)}
+                                onDelete={() =>
+                                  handleRemoveCollaborator(collaborator)
+                                }
                               />
                             )
                           )}

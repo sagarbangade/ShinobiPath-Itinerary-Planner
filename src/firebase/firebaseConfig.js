@@ -10,6 +10,7 @@ import {
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore"; // Import getDoc and setDoc
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyBsPku0LMeQl550teZ2tUlZsk-3Hjf3aQw",
   authDomain: "shinobipath-itinerary-planner.firebaseapp.com",
@@ -55,9 +56,9 @@ export const signInWithGoogle = async () => {
     if (!docSnap.exists()) {
       // Create a new document for the user in Firestore
       await setDoc(userRef, {
-        userId: user.uid,
+        userId: user.uid, // Good: Store UID as a field (optional, but helpful)
         displayName: user.displayName,
-        email: user.email,
+        email: user.email, // Good: Store email
         photoURL: user.photoURL,
         // Initialize other fields with default values
         bio: "",
