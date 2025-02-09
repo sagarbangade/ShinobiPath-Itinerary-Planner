@@ -56,7 +56,7 @@ const BudgetChart = ({ expenses, budget, activities }) => {
           options={{ maintainAspectRatio: false, responsive: true }}
         />
       </div>
-      <div>
+      {/* <div>
         <div
           style={{
             display: "flex",
@@ -87,7 +87,7 @@ const BudgetChart = ({ expenses, budget, activities }) => {
           <p>Expenses: {totalExpenses}</p>
           <p>Activity Costs: {totalActivityCosts}</p>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };
