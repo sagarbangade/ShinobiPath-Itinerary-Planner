@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { InputAdornment } from "@mui/material";
 import { Search as SearchIcon } from "@mui/icons-material";
+import { useItineraryData, ItineraryDataProvider } from '../contexts/ItineraryDataContext';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -210,7 +211,9 @@ const isValidEmail = (email) => {
 const ItineraryPlanner = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [userItineraries, setUserItineraries] = useState([]);
+  const { setCurrentTravelPlans } = useItineraryData();
   const [openModal, setOpenModal] = useState(false);
+
   const [currentItinerary, setCurrentItinerary] = useState({
     title: "",
     description: "",
@@ -351,13 +354,15 @@ const ItineraryPlanner = () => {
         new Map(allItineraries.map((item) => [item.id, item])).values()
       ); // Deduplicate by ID
       setUserItineraries(uniqueItineraries);
+      // **UPDATE CONTEXT HERE with ALL itineraries (or a subset as needed):**
+      setCurrentTravelPlans(uniqueItineraries); // Pass fetched itineraries to context
     } catch (error) {
       console.error("Error fetching itineraries:", error);
       alert("Error fetching itineraries. See console for details.");
     } finally {
       setLoading(false);
     }
-  }, [fetchOwnedItineraries, fetchSharedItineraries]);
+  }, [fetchOwnedItineraries, fetchSharedItineraries,setCurrentTravelPlans]);
 
   useEffect(() => {
     fetchAllItineraries();

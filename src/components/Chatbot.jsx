@@ -1,12 +1,12 @@
-import React, { useRef } from "react"; // Removed useState, useEffect
+// src\components\Chatbot.jsx
+import React, { useRef } from "react";
 import "../scss/chat.css";
 import "font-awesome/css/font-awesome.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
-import { useChatbot } from "../contexts/ChatbotContext"; // Import the hook
+import { useChatbot } from "../contexts/ChatbotContext";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { auth } from "../firebase/firebaseConfig"; // Import Firebase auth
 
-const apiKey = "AIzaSyBYCyPObqcCeOHxrtWf8kfFYkhOnmHxWOI"; // **Replace with your actual API key!**
+const apiKey = "YOUR_API_KEY"; // **Replace with your actual API key!**
 const genAI = new GoogleGenerativeAI(apiKey);
 
 const generationConfig = {
@@ -28,7 +28,7 @@ const speechSynthesis = window.speechSynthesis;
 
 function textToSpeech(text) {
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SynthesisUtterance(text);
 
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
@@ -65,12 +65,12 @@ const Chatbot = () => {
     messagesContainerRef,
     sendMessage,
     userName,
+    userPhotoURL,
     isListening,
     setIsListening,
     loadingHistory,
-  } = useChatbot(); // Use the hook to get context values
+  } = useChatbot();
 
-  // Dynamically create the model with system instruction including user's name
   const model = genAI.getGenerativeModel({
     model: "gemini-2.0-flash-lite-preview-02-05",
     systemInstruction: userName
@@ -79,8 +79,8 @@ const Chatbot = () => {
   });
 
   const handleSendMessage = async () => {
-    const newMessageText = textInputRef.current?.textContent || ""; // Get text from contentEditable div
-    sendMessage(newMessageText); // Call sendMessage from context
+    const newMessageText = textInputRef.current?.textContent || "";
+    sendMessage(newMessageText);
   };
 
   const handleKeyDown = (event) => {
@@ -163,10 +163,20 @@ const Chatbot = () => {
         </div>
 
         <ul className="messages" ref={messagesContainerRef}>
-          {loadingHistory && <li>Loading chat history...</li>}{" "}
-          {/* Display loading message */}
+          {console.log(userPhotoURL)}
+          {loadingHistory && <li>Loading chat history...</li>}
           {messages.map((message, index) => (
-            <li key={index} className={message.type}>
+            <li
+              key={index}
+              className={message.type}
+              style={
+                message.type === "self" && userPhotoURL
+                  ? {
+                      "--user-bg-image": `url(${userPhotoURL})`, // Keep CSS variable
+                    }
+                  : {}
+              }
+            >
               <div dangerouslySetInnerHTML={{ __html: message.text }} />
             </li>
           ))}

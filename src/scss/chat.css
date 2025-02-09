@@ -171,7 +171,7 @@
 }
 .floating-chat .chat .messages li.self:before {
   left: -45px;
-  background-image: url(https://img.freepik.com/premium-photo/abstract-person-portrait-with-neon-lights_691560-544.jpg);
+  background-image: var(--user-bg-image) !important;
 }
 .floating-chat .chat .messages li.self:after {
   border-left: 10px solid transparent;
