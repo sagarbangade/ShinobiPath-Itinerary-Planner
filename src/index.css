@@ -4,34 +4,32 @@
  *  STYLE 16
  */
 
- ::-webkit-scrollbar-track
- {
-   -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
-   background-color: #000000;
-   border-radius: 7%;
- }
- 
- ::-webkit-scrollbar
- {
-   width: 7px;
-   height: 5px;
-   background-color: #00000000;
- }
- 
- ::-webkit-scrollbar-thumb
- {
-   border-radius: 5px;
-   background-color: #000000;
-   background-image: -webkit-linear-gradient(top,
-                         #ffc400 0%,
-                         #ffa268 50%,
-                         #ffa268 51%,
-                         #ff6200 100%);
- }
- 
- 
- /* In your CSS file (e.g., styles.css) */
- .slow-spin {
+::-webkit-scrollbar-track {
+  -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
+  background-color: #000000;
+  border-radius: 7%;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 5px;
+  background-color: #00000000;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 5px;
+  background-color: #000000;
+  background-image: -webkit-linear-gradient(
+    top,
+    #ffc400 0%,
+    #ffa268 50%,
+    #ffa268 51%,
+    #ff6200 100%
+  );
+}
+
+/* In your CSS file (e.g., styles.css) */
+.slow-spin {
   animation: slowRotation 6s linear infinite;
 }
 
@@ -39,10 +37,23 @@
   0% {
     transform: rotate(-0deg);
   }
-  50% { /* At 3 seconds (50% of 6s) */
+  50% {
+    /* At 3 seconds (50% of 6s) */
     transform: rotate(-720deg); /* Two full rotations in first 3 seconds */
   }
   100% {
     transform: rotate(-2500deg); /* One more rotation in final 3 seconds */
   }
+}
+.App {
+  font-family: sans-serif;
+  text-align: center;
+}
+
+
+pac-container.pac-logo{
+  display: block;
+  background-color: aliceblue;
+  color: #000000;
+
 }

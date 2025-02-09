@@ -1,10 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
-import { useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { InputAdornment } from "@mui/material";
 import { Search as SearchIcon } from "@mui/icons-material";
-import { useItineraryData, ItineraryDataProvider } from '../contexts/ItineraryDataContext';
+import {
+  useItineraryData,
+  ItineraryDataProvider,
+} from "../contexts/ItineraryDataContext";
+import "../index.css";
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -64,10 +67,9 @@ import {
   List, // <-- ADD List HERE
   ListItem, // <-- ADD ListItem HERE
   ListItemText, // <-- ADD ListItemText HERE
-  
 } from "@mui/material";
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
@@ -93,6 +95,12 @@ import { v4 as uuidv4 } from "uuid";
 import BudgetChart from "../components/BudgetChart";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import {
+  GoogleMap, // ADD THIS IMPORT
+  LoadScript, // ADD THIS IMPORT
+  StandaloneSearchBox, // ADD THIS IMPORT
+  Marker, // ADD THIS IMPORT if you want to show a marker on map after selection
+} from "@react-google-maps/api"; // Import from react-google-maps/api
 
 const localizer = momentLocalizer(moment);
 
@@ -129,38 +137,49 @@ const ACTIVITY_TYPES = [
 // Custom Toolbar Component
 const MyCustomToolbar = ({ label, onNavigate, onView, view, sx }) => {
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", ...sx }}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        ...sx,
+      }}
+    >
       <Box>
-        <IconButton aria-label="prev" onClick={() => onNavigate('PREV')}>
+        <IconButton aria-label="prev" onClick={() => onNavigate("PREV")}>
           <NavigateBeforeIcon />
         </IconButton>
-        <IconButton aria-label="next" onClick={() => onNavigate('NEXT')}>
+        <IconButton aria-label="next" onClick={() => onNavigate("NEXT")}>
           <NavigateNextIcon />
         </IconButton>
         <Button
           size="small"
-          onClick={() => onView('today')}
+          onClick={() => onView("today")}
           sx={{ ml: 1, textTransform: "none" }}
         >
           Today
         </Button>
       </Box>
-      <Typography variant="h6" component="h4" sx={{ fontWeight: "bold", color: "text.primary" }}>
+      <Typography
+        variant="h6"
+        component="h4"
+        sx={{ fontWeight: "bold", color: "text.primary" }}
+      >
         {label}
       </Typography>
       <Box>
         <Button
           size="small"
-          variant={view === 'month' ? 'contained' : 'outlined'}
-          onClick={() => onView('month')}
+          variant={view === "month" ? "contained" : "outlined"}
+          onClick={() => onView("month")}
           sx={{ mr: 1, textTransform: "none" }}
         >
           Month
         </Button>
         <Button
           size="small"
-          variant={view === 'week' ? 'contained' : 'outlined'}
-          onClick={() => onView('week')}
+          variant={view === "week" ? "contained" : "outlined"}
+          onClick={() => onView("week")}
           sx={{ textTransform: "none" }}
         >
           Week
@@ -170,13 +189,15 @@ const MyCustomToolbar = ({ label, onNavigate, onView, view, sx }) => {
   );
 };
 
-
 // Custom Month Header Component
 const MyCustomMonthHeader = ({ label, sx }) => {
   return (
     <Box sx={{ display: "flex", justifyContent: "space-around", ...sx }}>
-      {label.split(',').map((day, index) => (
-        <Typography key={index} sx={{ width: "14.28%", textAlign: "center", ...sx }}>
+      {label.split(",").map((day, index) => (
+        <Typography
+          key={index}
+          sx={{ width: "14.28%", textAlign: "center", ...sx }}
+        >
           {day}
         </Typography>
       ))}
@@ -184,16 +205,10 @@ const MyCustomMonthHeader = ({ label, sx }) => {
   );
 };
 
-
 // Custom Date Cell Component
 const MyCustomDateCell = ({ children, sx, ...otherProps }) => {
-  return (
-    <Box sx={{ ...sx, ...otherProps }}>
-      {children}
-    </Box>
-  );
+  return <Box sx={{ ...sx, ...otherProps }}>{children}</Box>;
 };
-
 
 // Custom Event Component
 const MyCustomEvent = ({ event, title, sx, ...props }) => {
@@ -238,6 +253,7 @@ const ItineraryPlanner = () => {
   const isFilterMenuOpen = Boolean(filterAnchorEl);
   const [loading, setLoading] = useState(false);
   const dialogContentRef = useRef(null);
+  const searchBoxRef = useRef(null); // Create a ref for StandaloneSearchBox
 
   const handlePrint = useCallback(() => {
     // Use useCallback for better practice
@@ -362,7 +378,7 @@ const ItineraryPlanner = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchOwnedItineraries, fetchSharedItineraries,setCurrentTravelPlans]);
+  }, [fetchOwnedItineraries, fetchSharedItineraries, setCurrentTravelPlans]);
 
   useEffect(() => {
     fetchAllItineraries();
@@ -382,7 +398,9 @@ const ItineraryPlanner = () => {
           (categoryFilter === "" || itinerary.category === categoryFilter) &&
           (searchQuery === "" || // Add search filter here
             itinerary.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            itinerary.description.toLowerCase().includes(searchQuery.toLowerCase()))
+            itinerary.description
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase()))
       );
       setPlansForSelectedDate(plans);
     } else {
@@ -734,22 +752,49 @@ const ItineraryPlanner = () => {
   };
 
   const handleAddDestination = () => {
-    setCurrentItinerary((prev) => ({
-      ...prev,
-      destinations: [
-        ...prev.destinations,
-        {
-          id: uuidv4(),
-          name: "",
-          startDate: "",
-          endDate: "",
-          activities: [],
-          expenses: [],
-          reminders: [],
-          activeSubTab: 0,
+    setCurrentItinerary((prev) => {
+      return {
+        ...prev,
+        destinations: [
+          ...prev.destinations,
+          {
+            id: uuidv4(),
+            name: "",
+            startDate: "",
+            endDate: "",
+            activities: [],
+            expenses: [],
+            reminders: [],
+            activeSubTab: 0,
+            location: null, // Add a 'location' field to store Google Maps data
+          },
+        ],
+      };
+    });
+    console.log(
+      "handleAddDestination - currentItinerary.destinations:",
+      currentItinerary.destinations
+    ); // Log to check if destinations are being added
+  };
+
+  const handleDestinationLocationSelect = (destinationIndex, place) => {
+    console.log("Place details:", place); // Log the entire place object
+    setCurrentItinerary((prev) => {
+      const updatedDestinations = [...prev.destinations];
+      updatedDestinations[destinationIndex] = {
+        ...updatedDestinations[destinationIndex],
+        name: place.formatted_address || place.name || "", // Use formatted address or name
+        location: {
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+          placeId: place.place_id,
+          formattedAddress: place.formatted_address,
+          name: place.name,
+          // You can store other relevant details from 'place' object if needed
         },
-      ],
-    }));
+      };
+      return { ...prev, destinations: updatedDestinations };
+    });
   };
 
   const handleAddActivity = (destinationIndex) => {
@@ -1036,356 +1081,369 @@ const ItineraryPlanner = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Navbar />
+    <LoadScript
+      googleMapsApiKey="AIzaSyDHTUzAPE4mdiY6bKHtghFPEzmOJQUXI6I"
+      libraries={["places"]}
+    >
       <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          bgcolor: "#f5f5f5",
-          fontFamily: "Arial, sans-serif",
-        }}
+        sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
       >
-        <Box sx={{ maxWidth: "1280px", mx: "auto" }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                mb={3}
-                flexDirection={{ xs: "column", sm: "row" }}
-                gap={{ xs: 2, sm: 0 }} // Added gap for better mobile layout
-              >
-                <Typography
-                  variant="h4"
-                  component="h1"
-                  sx={{ fontWeight: "bold" }}
-                  mb={{ xs: 1, sm: 2 }} // Adjust margin for mobile
+        <Navbar />
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            p: 3,
+            bgcolor: "#f5f5f5",
+            fontFamily: "Arial, sans-serif",
+          }}
+        >
+          <Box sx={{ maxWidth: "1280px", mx: "auto" }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={3}
+                  flexDirection={{ xs: "column", sm: "row" }}
+                  gap={{ xs: 2, sm: 0 }} // Added gap for better mobile layout
                 >
-                  Itinerary Planner
-                </Typography>
-
-                <Box display="flex" gap={1} alignItems="center"> {/* Align items vertically in the button box */}
-                  <TextField
-                    label="Search Itineraries"
-                    variant="outlined"
-                    size="small"
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon color="action" />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{ mr: 1, width: { xs: '100%', sm: 'auto', md: 300 } }} // Responsive width
-                  />
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setOpenModal(true)}
-                    sx={{ bgcolor: "#ff6d12", color: "white" }}
+                  <Typography
+                    variant="h4"
+                    component="h1"
+                    sx={{ fontWeight: "bold" }}
+                    mb={{ xs: 1, sm: 2 }} // Adjust margin for mobile
                   >
-                    New
-                  </Button>
+                    Itinerary Planner
+                  </Typography>
 
-
-                  <Tooltip title="Filter by Category">
-                    <IconButton
-                      aria-label="filter"
-                      aria-controls="filter-menu"
-                      aria-haspopup="true"
-                      onClick={handleFilterMenuOpen}
-                    >
-                      <FilterListIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Menu
-                    id="filter-menu"
-                    anchorEl={filterAnchorEl}
-                    open={isFilterMenuOpen}
-                    onClose={handleFilterMenuClose}
-                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                    transformOrigin={{ vertical: "top", horizontal: "right" }}
-                  >
-                    <MenuList>
-                      {CATEGORIES.map((category) => (
-                        <MenuItem
-                          key={category}
-                          onClick={() => handleCategoryFilterSelect(category)}
-                          selected={category === categoryFilter}
-                        >
-                          <ListItemIcon>
-                            <LabelIcon />
-                          </ListItemIcon>
-                          {category}
-                        </MenuItem>
-                      ))}
-                    </MenuList>
-                    <Divider />
-                    <Box
-                      sx={{
-                        p: 1,
-                        display: "flex",
-                        justifyContent: "space-between",
+                  <Box display="flex" gap={1} alignItems="center">
+                    {" "}
+                    {/* Align items vertically in the button box */}
+                    <TextField
+                      label="Search Itineraries"
+                      variant="outlined"
+                      size="small"
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon color="action" />
+                          </InputAdornment>
+                        ),
                       }}
+                      sx={{ mr: 1, width: { xs: "100%", sm: "auto", md: 300 } }} // Responsive width
+                    />
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => setOpenModal(true)}
+                      sx={{ bgcolor: "#ff6d12", color: "white" }}
                     >
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<ClearIcon />}
-                        onClick={handleClearFilter}
-                        size="small"
+                      New
+                    </Button>
+                    <Tooltip title="Filter by Category">
+                      <IconButton
+                        aria-label="filter"
+                        aria-controls="filter-menu"
+                        aria-haspopup="true"
+                        onClick={handleFilterMenuOpen}
                       >
-                        Clear
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<CheckIcon />}
-                        onClick={handleApplyFilter}
-                        size="small"
+                        <FilterListIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Menu
+                      id="filter-menu"
+                      anchorEl={filterAnchorEl}
+                      open={isFilterMenuOpen}
+                      onClose={handleFilterMenuClose}
+                      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                      transformOrigin={{ vertical: "top", horizontal: "right" }}
+                    >
+                      <MenuList>
+                        {CATEGORIES.map((category) => (
+                          <MenuItem
+                            key={category}
+                            onClick={() => handleCategoryFilterSelect(category)}
+                            selected={category === categoryFilter}
+                          >
+                            <ListItemIcon>
+                              <LabelIcon />
+                            </ListItemIcon>
+                            {category}
+                          </MenuItem>
+                        ))}
+                      </MenuList>
+                      <Divider />
+                      <Box
+                        sx={{
+                          p: 1,
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
                       >
-                        Apply
-                      </Button>
-                    </Box>
-                  </Menu>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          startIcon={<ClearIcon />}
+                          onClick={handleClearFilter}
+                          size="small"
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<CheckIcon />}
+                          onClick={handleApplyFilter}
+                          size="small"
+                        >
+                          Apply
+                        </Button>
+                      </Box>
+                    </Menu>
+                  </Box>
                 </Box>
-              </Box>
-            </Grid>
-
-            {loading ? (
-              <Grid
-                item
-                xs={12}
-                sx={{ display: "flex", justifyContent: "center" }}
-              >
-                <CircularProgress />
               </Grid>
-            ) : (
-              <>
-                <Grid item xs={12} md={8}>
-                  {selectedDate && (
-                    <Card elevation={3} sx={{ mb: 2 }}>
-                      <CardContent>
-                        <Typography
-                          variant="h6"
-                          sx={{ color: "#2E7D32", fontWeight: "bold" }}
-                        >
-                          Plans for{" "}
-                          {moment(selectedDate).format("MMMM DD, YYYY")}
-                        </Typography>
-                        {plansForSelectedDate.length > 0 ? (
-                          plansForSelectedDate.map((plan) =>
-                            plan.destinations.map((destination, index) => (
-                              <Card
-                                key={`${plan.id}-${index}`}
-                                elevation={2}
-                                sx={{ mb: 1 }}
-                              >
-                                <CardContent>
-                                  <Typography
-                                    variant="subtitle1"
-                                    sx={{ fontWeight: "bold" }}
-                                  >
-                                    {plan.title} - {destination.name}
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    Location: {destination.name}
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    {moment(destination.startDate).format("LL")}{" "}
-                                    - {moment(destination.endDate).format("LL")}
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{ fontStyle: "italic" }}
-                                  >
-                                    Category: {plan.category}
-                                  </Typography>
-                                </CardContent>
-                              </Card>
-                            ))
-                          )
-                        ) : (
-                          <Typography variant="body1">
-                            No plans for this date.
-                          </Typography>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="itineraries">
-                      {(provided) => (
-                        <Box
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
-                          sx={{ display: "grid", gap: 2 }}
-                        >
-                          {filteredItineraries.map((itinerary, index) => (
-                            <Draggable
-                              key={itinerary.id}
-                              draggableId={itinerary.id}
-                              index={index}
-                            >
-                              {(provided) => (
-                                <Card
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  elevation={4} // Slightly more pronounced elevation
-                                  sx={{
-                                    backgroundColor: "#fff", // Still white background for cleanliness
-                                    border: "1px solid rgba(0, 0, 0, 0.1)", // Very light border
-                                    borderRadius: "8px", // More rounded corners for a softer look
-                                    boxShadow: "5px 5px 15px rgba(0,0,0,0.1)", // More noticeable shadow for depth
-                                    overflow: "hidden", // Clip content for cleaner borders
-                                    position: "relative", // For category banner positioning
-                                  }}
-                                >
-                                  {/* Category Banner (Top Left Corner) */}
-                                  <Box
-                                    sx={{
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      width: "100%",
-                                      height: "8px", // Height of the banner
-                                      backgroundColor:
-                                        itinerary.category === "leisure"
-                                          ? "#a5d6a7" // Green banner
-                                          : itinerary.category === "adventure"
-                                          ? "#90caf9" // Blue banner
-                                          : itinerary.category === "cultural"
-                                          ? "#ffe0b2" // Orange banner
-                                          : "#e0e0e0", // Grey banner default
-                                    }}
-                                  />
 
-                                  <CardContent
+              {loading ? (
+                <Grid
+                  item
+                  xs={12}
+                  sx={{ display: "flex", justifyContent: "center" }}
+                >
+                  <CircularProgress />
+                </Grid>
+              ) : (
+                <>
+                  <Grid item xs={12} md={8}>
+                    {selectedDate && (
+                      <Card elevation={3} sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography
+                            variant="h6"
+                            sx={{ color: "#2E7D32", fontWeight: "bold" }}
+                          >
+                            Plans for{" "}
+                            {moment(selectedDate).format("MMMM DD, YYYY")}
+                          </Typography>
+                          {plansForSelectedDate.length > 0 ? (
+                            plansForSelectedDate.map((plan) =>
+                              plan.destinations.map((destination, index) => (
+                                <Card
+                                  key={`${plan.id}-${index}`}
+                                  elevation={2}
+                                  sx={{ mb: 1 }}
+                                >
+                                  <CardContent>
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{ fontWeight: "bold" }}
+                                    >
+                                      {plan.title} - {destination.name}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      Location: {destination.name}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {moment(destination.startDate).format(
+                                        "LL"
+                                      )}{" "}
+                                      -{" "}
+                                      {moment(destination.endDate).format("LL")}
+                                    </Typography>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{ fontStyle: "italic" }}
+                                    >
+                                      Category: {plan.category}
+                                    </Typography>
+                                  </CardContent>
+                                </Card>
+                              ))
+                            )
+                          ) : (
+                            <Typography variant="body1">
+                              No plans for this date.
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId="itineraries">
+                        {(provided) => (
+                          <Box
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                            sx={{ display: "grid", gap: 2 }}
+                          >
+                            {filteredItineraries.map((itinerary, index) => (
+                              <Draggable
+                                key={itinerary.id}
+                                draggableId={itinerary.id}
+                                index={index}
+                              >
+                                {(provided) => (
+                                  <Card
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    elevation={4} // Slightly more pronounced elevation
                                     sx={{
-                                      display: "flex",
-                                      flexDirection: {
-                                        xs: "column",
-                                        sm: "row",
-                                      },
-                                      justifyContent: "space-between",
-                                      alignItems: {
-                                        xs: "flex-start",
-                                        sm: "center",
-                                      },
-                                      gap: { xs: 2, sm: 0 },
-                                      padding: 3, // Slightly more padding inside
-                                      // backgroundColor:"red",
+                                      backgroundColor: "#fff", // Still white background for cleanliness
+                                      border: "1px solid rgba(0, 0, 0, 0.1)", // Very light border
+                                      borderRadius: "8px", // More rounded corners for a softer look
+                                      boxShadow: "5px 5px 15px rgba(0,0,0,0.1)", // More noticeable shadow for depth
+                                      overflow: "hidden", // Clip content for cleaner borders
+                                      position: "relative", // For category banner positioning
                                     }}
                                   >
+                                    {/* Category Banner (Top Left Corner) */}
                                     <Box
                                       sx={{
-                                        width: { xs: "100%", sm: "auto" },
-                                        mb: { xs: 0, sm: 0 },
+                                        position: "absolute",
+                                        top: 0,
+                                        left: 0,
+                                        width: "100%",
+                                        height: "8px", // Height of the banner
+                                        backgroundColor:
+                                          itinerary.category === "leisure"
+                                            ? "#a5d6a7" // Green banner
+                                            : itinerary.category === "adventure"
+                                            ? "#90caf9" // Blue banner
+                                            : itinerary.category === "cultural"
+                                            ? "#ffe0b2" // Orange banner
+                                            : "#e0e0e0", // Grey banner default
+                                      }}
+                                    />
+
+                                    <CardContent
+                                      sx={{
+                                        display: "flex",
+                                        flexDirection: {
+                                          xs: "column",
+                                          sm: "row",
+                                        },
+                                        justifyContent: "space-between",
+                                        alignItems: {
+                                          xs: "flex-start",
+                                          sm: "center",
+                                        },
+                                        gap: { xs: 2, sm: 0 },
+                                        padding: 3, // Slightly more padding inside
+                                        // backgroundColor:"red",
                                       }}
                                     >
-                                      <Typography
-                                        variant="h5" // Slightly larger title
-                                        component="h2"
-                                        sx={{
-                                          fontWeight: "bold",
-                                          color: "textPrimary",
-                                          mb: 0.5,
-                                        }}
-                                      >
-                                        {itinerary.title}
-                                      </Typography>
                                       <Box
                                         sx={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          mb: 1,
+                                          width: { xs: "100%", sm: "auto" },
+                                          mb: { xs: 0, sm: 0 },
                                         }}
                                       >
-                                        {" "}
-                                        {/* Box for Category + icon + spacing */}
-                                        <ListItemIcon
+                                        <Typography
+                                          variant="h5" // Slightly larger title
+                                          component="h2"
                                           sx={{
-                                            minWidth: "auto",
-                                            mr: 0.5,
-                                            color: "textSecondary",
+                                            fontWeight: "bold",
+                                            color: "textPrimary",
+                                            mb: 0.5,
+                                          }}
+                                        >
+                                          {itinerary.title}
+                                        </Typography>
+                                        <Box
+                                          sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            mb: 1,
                                           }}
                                         >
                                           {" "}
-                                          {/* Icon styling */}
-                                          {itinerary.category === "leisure" ? (
-                                            <LabelIcon
-                                              sx={{ fontSize: "1.2rem" }}
-                                            />
-                                          ) : itinerary.category ===
-                                            "adventure" ? (
-                                            <LabelIcon
-                                              sx={{ fontSize: "1.2rem", color:"" }}
-                                            />
-                                          ) : itinerary.category ===
-                                            "cultural" ? (
-                                            <LabelIcon
-                                              sx={{ fontSize: "1.2rem" }}
-                                            />
-                                          ) : (
-                                            <LabelIcon
-                                              sx={{ fontSize: "1.2rem" }}
-                                            />
-                                          )}
-                                        </ListItemIcon>
-                                        <Typography
-                                          variant="subtitle1" // Subtitle1 for Category
-                                          sx={{
-                                            fontWeight: "semibold",
-                                            color: "textSecondary",
-                                          }}
-                                        >
-                                          {itinerary.category.toUpperCase()}
-                                        </Typography>
-                                        {itinerary.isCollaborative && (
-                                          <Chip
-                                            label="Collaborative"
-                                            size="small"
-                                            icon={
-                                              <ShareIcon
-                                                sx={{ fontSize: "1rem" }}
-                                              />
-                                            }
+                                          {/* Box for Category + icon + spacing */}
+                                          <ListItemIcon
                                             sx={{
-                                              ml: 1,
-                                              backgroundColor:
-                                                "rgba(0, 0, 0, 0.08)",
+                                              minWidth: "auto",
+                                              mr: 0.5,
                                               color: "textSecondary",
                                             }}
-                                          />
-                                        )}
+                                          >
+                                            {" "}
+                                            {/* Icon styling */}
+                                            {itinerary.category ===
+                                            "leisure" ? (
+                                              <LabelIcon
+                                                sx={{ fontSize: "1.2rem" }}
+                                              />
+                                            ) : itinerary.category ===
+                                              "adventure" ? (
+                                              <LabelIcon
+                                                sx={{
+                                                  fontSize: "1.2rem",
+                                                  color: "",
+                                                }}
+                                              />
+                                            ) : itinerary.category ===
+                                              "cultural" ? (
+                                              <LabelIcon
+                                                sx={{ fontSize: "1.2rem" }}
+                                              />
+                                            ) : (
+                                              <LabelIcon
+                                                sx={{ fontSize: "1.2rem" }}
+                                              />
+                                            )}
+                                          </ListItemIcon>
+                                          <Typography
+                                            variant="subtitle1" // Subtitle1 for Category
+                                            sx={{
+                                              fontWeight: "semibold",
+                                              color: "textSecondary",
+                                            }}
+                                          >
+                                            {itinerary.category.toUpperCase()}
+                                          </Typography>
+                                          {itinerary.isCollaborative && (
+                                            <Chip
+                                              label="Collaborative"
+                                              size="small"
+                                              icon={
+                                                <ShareIcon
+                                                  sx={{ fontSize: "1rem" }}
+                                                />
+                                              }
+                                              sx={{
+                                                ml: 1,
+                                                backgroundColor:
+                                                  "rgba(0, 0, 0, 0.08)",
+                                                color: "textSecondary",
+                                              }}
+                                            />
+                                          )}
+                                        </Box>
+
+                                        <Typography
+                                          variant="body2" // Body2 for Dates
+                                          color="textSecondary"
+                                          sx={{
+                                            mt: 0,
+                                            mb: 0,
+                                            fontSize: "0.95rem",
+                                          }} // Adjusted date styling
+                                        >
+                                          {moment(itinerary.startDate).format(
+                                            "LL"
+                                          )}{" "}
+                                          -{" "}
+                                          {moment(itinerary.endDate).format(
+                                            "LL"
+                                          )}
+                                        </Typography>
                                       </Box>
-
-                                      <Typography
-                                        variant="body2" // Body2 for Dates
-                                        color="textSecondary"
-                                        sx={{
-                                          mt: 0,
-                                          mb: 0,
-                                          fontSize: "0.95rem",
-                                        }} // Adjusted date styling
-                                      >
-                                        {moment(itinerary.startDate).format(
-                                          "LL"
-                                        )}{" "}
-                                        -{" "}
-                                        {moment(itinerary.endDate).format("LL")}
-                                      </Typography>
-
-                                      
-                                    </Box>
-                                    {itinerary.destinations.length > 0 && (
-                                        <Box sx={{ mt:0}}>
+                                      {itinerary.destinations.length > 0 && (
+                                        <Box sx={{ mt: 0 }}>
                                           <Typography
                                             variant="overline" // Overline for "Destinations" label - small caps
                                             sx={{
@@ -1425,8 +1483,8 @@ const ItineraryPlanner = () => {
                                                     primaryTypographyProps={{
                                                       variant: "body2",
                                                       color: "textPrimary",
-                                                    }} // Body2 for destination names
-                                                    primary={destination.name}
+                                                    }}
+                                                    primary={destination.name} // Rendering destination.name here
                                                   />
                                                 </ListItem>
                                               )
@@ -1434,689 +1492,544 @@ const ItineraryPlanner = () => {
                                           </List>
                                         </Box>
                                       )}
+                                      <Box
+                                        display="flex"
+                                        sx={{
+                                          flexDirection: {
+                                            xs: "row",
+                                            sm: "column",
+                                          },
+                                          alignItems: {
+                                            xs: "center",
+                                            sm: "flex-end",
+                                          },
+                                        }}
+                                      >
+                                        <Tooltip title="View Details">
+                                          <IconButton
+                                            color="primary"
+                                            size="small"
+                                            onClick={() =>
+                                              handleViewItinerary(itinerary.id)
+                                            }
+                                          >
+                                            <VisibilityIcon
+                                              sx={{ fontSize: "1.3rem" }}
+                                            />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Edit Itinerary">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() =>
+                                              handleEditItinerary(itinerary)
+                                            }
+                                          >
+                                            <EditIcon
+                                              sx={{
+                                                fontSize: "1.3rem",
+                                                color: "orange",
+                                              }}
+                                            />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Delete Itinerary">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() =>
+                                              handleDeleteItinerary(
+                                                itinerary.id
+                                              )
+                                            }
+                                          >
+                                            <DeleteIcon
+                                              sx={{
+                                                fontSize: "1.3rem",
+                                                color: "red",
+                                              }}
+                                            />
+                                          </IconButton>
+                                        </Tooltip>
+
+                                        <Tooltip title="Print Itinerary">
+                                          <IconButton
+                                            size="small"
+                                            onClick={async () => {
+                                              await handleViewItinerary(
+                                                itinerary.id
+                                              );
+                                              handlePrint();
+                                            }}
+                                          >
+                                            <DownloadIcon
+                                              sx={{
+                                                fontSize: "1.3rem",
+                                                color: "green",
+                                              }}
+                                            />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
+                                    </CardContent>
+                                  </Card>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </Box>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Card elevation={3} sx={{ borderRadius: "12px" }}>
+                      {" "}
+                      {/* Rounded corners for the card */}
+                      <CardContent sx={{ padding: 3 }}>
+                        {" "}
+                        {/* Increased padding within CardContent */}
+                        <Typography
+                          variant="h6"
+                          component="h3"
+                          sx={{
+                            fontWeight: "bold",
+                            mb: 2, // Increased margin bottom for better spacing
+                            color: "#ff6d12", // Use primary color from your theme
+                            textAlign: "center", // Center the title
+                          }}
+                        >
+                          Calendar
+                        </Typography>
+                        <Box sx={{ overflow: "hidden", borderRadius: "8px" }}>
+                          {" "}
+                          {/* Rounded corners for the calendar itself, clipping overflow */}
+                          <Calendar
+                            localizer={localizer}
+                            events={events}
+                            startAccessor="start"
+                            endAccessor="end"
+                            style={{ height: 500 }} // Keep the height style if you need it fixed
+                            onSelectSlot={({ start }) =>
+                              handleDateSelect(start)
+                            }
+                            selectable={true}
+                            eventPropGetter={eventStyleGetter}
+                            className="itinerary-calendar" // Add a className for more specific CSS if needed
+                            components={{
+                              toolbar: (props) => (
+                                <MyCustomToolbar
+                                  {...props}
+                                  sx={{
+                                    backgroundColor: "#f0f0f0", // Light background for toolbar
+                                    borderBottom: "1px solid #e0e0e0", // Separator line
+                                    padding: "8px 16px", // Padding for toolbar content
+                                    borderRadius: "8px 8px 0 0", // Rounded top corners to match calendar box
+                                  }}
+                                />
+                              ),
+                              month: {
+                                header: (props) => (
+                                  <MyCustomMonthHeader
+                                    {...props}
+                                    sx={{
+                                      backgroundColor: "#fafafa", // Slightly lighter background for month header
+                                      padding: "6px 0",
+                                      fontWeight: "bold",
+                                      color: "text.secondary", // Muted color for weekdays
+                                    }}
+                                  />
+                                ),
+                                date: (props) => (
+                                  <MyCustomDateCell
+                                    {...props}
+                                    sx={{
+                                      padding: "8px",
+                                      border: "1px solid #eee", // Light grid lines
+                                      textAlign: "center",
+                                      "&:hover": {
+                                        backgroundColor: "#f5f5f5", // Hover effect on date cells
+                                      },
+                                    }}
+                                  />
+                                ),
+                              },
+                              event: (props) => (
+                                <MyCustomEvent
+                                  {...props}
+                                  sx={{
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+                                  }}
+                                /> // Subtle shadow for events
+                              ),
+                            }}
+                          />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </>
+              )}
+
+              <Dialog
+                open={viewItineraryId !== null}
+                onClose={handleCloseViewItinerary}
+                maxWidth="md"
+                fullWidth
+                scroll="paper"
+                sx={{
+                  "& .MuiDialog-paper": {
+                    borderRadius: "16px",
+                    overflowY: "visible",
+                  },
+                }}
+              >
+                <DialogTitle
+                  sx={{
+                    padding: "1px 20px", // Reduced padding for title
+                    fontWeight: "bold",
+                    fontSize: "1.75rem", // Slightly smaller title font
+                    color: "#263238",
+                    backgroundColor: "#f0f4c3",
+                    borderBottom: "2px solid #e0e0e0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Box display="flex" alignItems="center">
+                    <VisibilityIcon
+                      sx={{ mr: 1, fontSize: "1.75rem", color: "#ffb300" }}
+                    />
+                    {/* Itinerary Details */}
+                  </Box>
+                  <Box display="flex">
+                    {" "}
+                    {/* Container for action buttons in title */}
+                    <Tooltip title="Print">
+                      <IconButton
+                        aria-label="download"
+                        sx={{ color: "#757575", mr: 1 }}
+                      >
+                        {" "}
+                        {/* Download button before close */}
+                        <DownloadIcon onClick={handlePrint} />
+                      </IconButton>
+                    </Tooltip>
+                    <IconButton
+                      aria-label="close"
+                      onClick={handleCloseViewItinerary}
+                      sx={{ color: "#757575" }}
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  </Box>
+                </DialogTitle>
+                <DialogContent
+                  dividers
+                  sx={{
+                    padding: { xs: "16px", sm: "24px" },
+                    backgroundColor: "#fafafa",
+                  }} // Responsive padding for content
+                  ref={dialogContentRef}
+                >
+                  {viewItineraryId !== null &&
+                    userItineraries.find((it) => it.id === viewItineraryId) && (
+                      <Box>
+                        <Typography
+                          variant="h4"
+                          component="h2"
+                          align="center" // Center align the main title
+                          sx={{
+                            fontWeight: "bold",
+                            mb: 3,
+                            color: "#37474f",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            fontSize: { xs: "2rem", sm: "2.5rem", md: "3rem" }, // More responsive title size
+                          }}
+                        >
+                          {
+                            userItineraries.find(
+                              (it) => it.id === viewItineraryId
+                            ).title
+                          }
+                        </Typography>
+                        <Grid container spacing={3}>
+                          {" "}
+                          {/* Main Grid Container for all sections */}
+                          <Grid item xs={12}>
+                            {" "}
+                            {/* Basic Information Section - Full width on all devices */}
+                            <Card
+                              elevation={2}
+                              sx={{
+                                borderRadius: "10px",
+                                backgroundColor: "#fffde7",
+                              }}
+                            >
+                              <CardContent
+                                sx={{ padding: { xs: "12px", sm: "16px" } }}
+                              >
+                                {" "}
+                                {/* Responsive padding inside CardContent */}
+                                <Typography
+                                  variant="h6"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    mb: 1.5, // Slightly increased margin bottom
+                                    color: "#455a64",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    fontSize: "1.3rem", // Adjusted section title size
+                                  }}
+                                >
+                                  <InfoIcon sx={{ mr: 1, color: "#ffca28" }} />{" "}
+                                  Basic Information
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  {" "}
+                                  {/* Grid inside Basic Info Card */}
+                                  <Grid item xs={12} sm={6}>
                                     <Box
                                       display="flex"
-                                      sx={{
-                                        flexDirection: {
-                                          xs: "row",
-                                          sm: "column",
-                                        },
-                                        alignItems: {
-                                          xs: "center",
-                                          sm: "flex-end",
-                                        },
-                                      }}
+                                      alignItems="center"
+                                      mb={0.5}
                                     >
-                                      <Tooltip title="View Details">
-                                        <IconButton
-                                          color="primary"
-                                          size="small"
-                                          onClick={() =>
-                                            handleViewItinerary(itinerary.id)
-                                          }
-                                        >
-                                          <VisibilityIcon
-                                            sx={{ fontSize: "1.3rem" }}
-                                          />
-                                        </IconButton>
-                                      </Tooltip>
-                                      <Tooltip title="Edit Itinerary">
-                                        <IconButton
-                                          size="small"
-                                          onClick={() =>
-                                            handleEditItinerary(itinerary)
-                                          }
-                                        >
-                                          <EditIcon
-                                            sx={{
-                                              fontSize: "1.3rem",
-                                              color: "orange",
-                                            }}
-                                          />
-                                        </IconButton>
-                                      </Tooltip>
-                                      <Tooltip title="Delete Itinerary">
-                                        <IconButton
-                                          size="small"
-                                          onClick={() =>
-                                            handleDeleteItinerary(itinerary.id)
-                                          }
-                                        >
-                                          <DeleteIcon
-                                            sx={{
-                                              fontSize: "1.3rem",
-                                              color: "red",
-                                            }}
-                                          />
-                                        </IconButton>
-                                      </Tooltip>
-
-                                      <Tooltip title="Print Itinerary">
-                                        <IconButton
-                                          size="small"
-                                          onClick={async () => {
-                                            await handleViewItinerary(
-                                              itinerary.id
-                                            );
-                                            handlePrint();
-                                          }}
-                                        >
-                                          <DownloadIcon
-                                            sx={{
-                                              fontSize: "1.3rem",
-                                              color: "green",
-                                            }}
-                                          />
-                                        </IconButton>
-                                      </Tooltip>
+                                      <EventIcon
+                                        sx={{ mr: 1, color: "#78909c" }}
+                                      />
+                                      <Typography
+                                        variant="subtitle1"
+                                        sx={{
+                                          fontWeight: "bold",
+                                          color: "#546e7a",
+                                          fontSize: "1rem",
+                                        }} // Adjusted subtitle size
+                                      >
+                                        Dates:
+                                      </Typography>
                                     </Box>
-                                  </CardContent>
-                                </Card>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </Box>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-  <Card elevation={3} sx={{ borderRadius: "12px" }}> {/* Rounded corners for the card */}
-    <CardContent sx={{ padding: 3 }}> {/* Increased padding within CardContent */}
-      <Typography
-        variant="h6"
-        component="h3"
-        sx={{
-          fontWeight: "bold",
-          mb: 2, // Increased margin bottom for better spacing
-          color: "#ff6d12", // Use primary color from your theme
-          textAlign: "center", // Center the title
-        }}
-      >
-        Calendar
-      </Typography>
-      <Box sx={{ overflow: "hidden", borderRadius: "8px" }}> {/* Rounded corners for the calendar itself, clipping overflow */}
-        <Calendar
-          localizer={localizer}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: 500 }} // Keep the height style if you need it fixed
-          onSelectSlot={({ start }) => handleDateSelect(start)}
-          selectable={true}
-          eventPropGetter={eventStyleGetter}
-          className="itinerary-calendar" // Add a className for more specific CSS if needed
-          components={{
-            toolbar: (props) => (
-              <MyCustomToolbar
-                {...props}
-                sx={{
-                  backgroundColor: "#f0f0f0", // Light background for toolbar
-                  borderBottom: "1px solid #e0e0e0", // Separator line
-                  padding: "8px 16px", // Padding for toolbar content
-                  borderRadius: "8px 8px 0 0", // Rounded top corners to match calendar box
-                }}
-              />
-            ),
-            month: {
-              header: (props) => (
-                <MyCustomMonthHeader
-                  {...props}
-                  sx={{
-                    backgroundColor: "#fafafa", // Slightly lighter background for month header
-                    padding: "6px 0",
-                    fontWeight: "bold",
-                    color: "text.secondary", // Muted color for weekdays
-                  }}
-                />
-              ),
-              date: (props) => (
-                <MyCustomDateCell
-                  {...props}
-                  sx={{
-                    padding: "8px",
-                    border: "1px solid #eee", // Light grid lines
-                    textAlign: "center",
-                    "&:hover": {
-                      backgroundColor: "#f5f5f5", // Hover effect on date cells
-                    },
-                  }}
-                />
-              ),
-            },
-            event: (props) => (
-              <MyCustomEvent {...props} sx={{ boxShadow: "0 1px 3px rgba(0,0,0,0.12)" }} /> // Subtle shadow for events
-            ),
-          }}
-        />
-      </Box>
-    </CardContent>
-  </Card>
-</Grid>
-              </>
-            )}
-
-            <Dialog
-              open={viewItineraryId !== null}
-              onClose={handleCloseViewItinerary}
-              maxWidth="md"
-              fullWidth
-              scroll="paper"
-              sx={{
-                "& .MuiDialog-paper": {
-                  borderRadius: "16px",
-                  overflowY: "visible",
-                },
-              }}
-            >
-              <DialogTitle
-                sx={{
-                  padding: "1px 20px", // Reduced padding for title
-                  fontWeight: "bold",
-                  fontSize: "1.75rem", // Slightly smaller title font
-                  color: "#263238",
-                  backgroundColor: "#f0f4c3",
-                  borderBottom: "2px solid #e0e0e0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Box display="flex" alignItems="center">
-                  <VisibilityIcon
-                    sx={{ mr: 1, fontSize: "1.75rem", color: "#ffb300" }}
-                  />
-                  {/* Itinerary Details */}
-                </Box>
-                <Box display="flex">
-                  {" "}
-                  {/* Container for action buttons in title */}
-                  <Tooltip title="Print">
-                    <IconButton
-                      aria-label="download"
-                      sx={{ color: "#757575", mr: 1 }}
-                    >
-                      {" "}
-                      {/* Download button before close */}
-                      <DownloadIcon onClick={handlePrint} />
-                    </IconButton>
-                  </Tooltip>
-                  <IconButton
-                    aria-label="close"
-                    onClick={handleCloseViewItinerary}
-                    sx={{ color: "#757575" }}
-                  >
-                    <CloseIcon />
-                  </IconButton>
-                </Box>
-              </DialogTitle>
-              <DialogContent
-                dividers
-                sx={{
-                  padding: { xs: "16px", sm: "24px" },
-                  backgroundColor: "#fafafa",
-                }} // Responsive padding for content
-                ref={dialogContentRef}
-              >
-                {viewItineraryId !== null &&
-                  userItineraries.find((it) => it.id === viewItineraryId) && (
-                    <Box>
-                      <Typography
-                        variant="h4"
-                        component="h2"
-                        align="center" // Center align the main title
-                        sx={{
-                          fontWeight: "bold",
-                          mb: 3,
-                          color: "#37474f",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          fontSize: { xs: "2rem", sm: "2.5rem", md: "3rem" }, // More responsive title size
-                        }}
-                      >
-                        {
-                          userItineraries.find(
-                            (it) => it.id === viewItineraryId
-                          ).title
-                        }
-                      </Typography>
-                      <Grid container spacing={3}>
-                        {" "}
-                        {/* Main Grid Container for all sections */}
-                        <Grid item xs={12}>
-                          {" "}
-                          {/* Basic Information Section - Full width on all devices */}
-                          <Card
-                            elevation={2}
-                            sx={{
-                              borderRadius: "10px",
-                              backgroundColor: "#fffde7",
-                            }}
-                          >
-                            <CardContent
-                              sx={{ padding: { xs: "12px", sm: "16px" } }}
-                            >
-                              {" "}
-                              {/* Responsive padding inside CardContent */}
-                              <Typography
-                                variant="h6"
-                                sx={{
-                                  fontWeight: "bold",
-                                  mb: 1.5, // Slightly increased margin bottom
-                                  color: "#455a64",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  fontSize: "1.3rem", // Adjusted section title size
-                                }}
-                              >
-                                <InfoIcon sx={{ mr: 1, color: "#ffca28" }} />{" "}
-                                Basic Information
-                              </Typography>
-                              <Grid container spacing={2}>
-                                {" "}
-                                {/* Grid inside Basic Info Card */}
-                                <Grid item xs={12} sm={6}>
-                                  <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    mb={0.5}
-                                  >
-                                    <EventIcon
-                                      sx={{ mr: 1, color: "#78909c" }}
-                                    />
-                                    <Typography
-                                      variant="subtitle1"
-                                      sx={{
-                                        fontWeight: "bold",
-                                        color: "#546e7a",
-                                        fontSize: "1rem",
-                                      }} // Adjusted subtitle size
-                                    >
-                                      Dates:
-                                    </Typography>
-                                  </Box>
-                                  <Typography
-                                    variant="body1"
-                                    sx={{
-                                      color: "#607d8b",
-                                      fontSize: "0.9rem", // Slightly reduced body text size
-                                    }}
-                                  >
-                                    {moment(
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).startDate
-                                    ).format("LL")}{" "}
-                                    -{" "}
-                                    {moment(
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).endDate
-                                    ).format("LL")}
-                                  </Typography>
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    mb={0.5}
-                                  >
-                                    <Typography
-                                      sx={{
-                                        mr: 1,
-                                        color: "#78909c",
-                                        fontSize: "1.5rem", // Adjust size to match icon
-                                        display: "inline-flex", // Ensure it behaves like an inline icon
-                                        verticalAlign: "middle", // Align vertically with text
-                                      }}
-                                    >
-                                      ₹
-                                    </Typography>
-                                    <Typography
-                                      variant="subtitle1"
-                                      sx={{
-                                        fontWeight: "bold",
-                                        color: "#546e7a",
-                                        fontSize: "1rem",
-                                        marginRight: "3px",
-                                      }} // Adjusted subtitle size
-                                    >
-                                      Budget:
-                                    </Typography>
                                     <Typography
                                       variant="body1"
                                       sx={{
                                         color: "#607d8b",
-                                        fontSize: "1rem", // Slightly reduced body text size
+                                        fontSize: "0.9rem", // Slightly reduced body text size
                                       }}
                                     >
-                                      {
+                                      {moment(
                                         userItineraries.find(
                                           (it) => it.id === viewItineraryId
-                                        ).budget
-                                      }
+                                        ).startDate
+                                      ).format("LL")}{" "}
+                                      -{" "}
+                                      {moment(
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).endDate
+                                      ).format("LL")}
                                     </Typography>
-                                  </Box>
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    mb={0.5}
-                                  >
-                                    <CategoryIcon
-                                      sx={{ mr: 1, color: "#78909c" }}
-                                    />
-                                    <Typography
-                                      variant="subtitle1"
-                                      sx={{
-                                        fontWeight: "bold",
-                                        color: "#546e7a",
-                                        fontSize: "1rem",
-                                      }} // Adjusted subtitle size
+                                  </Grid>
+                                  <Grid item xs={12} sm={6}>
+                                    <Box
+                                      display="flex"
+                                      alignItems="center"
+                                      mb={0.5}
                                     >
-                                      Category:
-                                    </Typography>
-                                  </Box>
-                                  <Chip
-                                    label={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).category
-                                    }
-                                    size="small"
-                                    sx={{
-                                      backgroundColor: "#ffe0b2",
-                                      color: "#ef6c00",
-                                      fontWeight: "bold",
-                                      fontSize: "0.8rem", // Slightly smaller chip font size
-                                    }}
-                                    icon={
-                                      <LabelIcon
-                                        style={{
-                                          color: "#ef6c00",
-                                          fontSize: "1rem", // Adjusted chip icon size
+                                      <Typography
+                                        sx={{
+                                          mr: 1,
+                                          color: "#78909c",
+                                          fontSize: "1.5rem", // Adjust size to match icon
+                                          display: "inline-flex", // Ensure it behaves like an inline icon
+                                          verticalAlign: "middle", // Align vertically with text
                                         }}
-                                      />
-                                    }
-                                  />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    mb={0.5}
-                                  >
-                                    <PeopleIcon
-                                      sx={{ mr: 1, color: "#78909c" }}
-                                    />
-                                    <Typography
-                                      variant="subtitle1"
-                                      sx={{
-                                        fontWeight: "bold",
-                                        color: "#546e7a",
-                                        fontSize: "1rem",
-                                      }} // Adjusted subtitle size
+                                      >
+                                        ₹
+                                      </Typography>
+                                      <Typography
+                                        variant="subtitle1"
+                                        sx={{
+                                          fontWeight: "bold",
+                                          color: "#546e7a",
+                                          fontSize: "1rem",
+                                          marginRight: "3px",
+                                        }} // Adjusted subtitle size
+                                      >
+                                        Budget:
+                                      </Typography>
+                                      <Typography
+                                        variant="body1"
+                                        sx={{
+                                          color: "#607d8b",
+                                          fontSize: "1rem", // Slightly reduced body text size
+                                        }}
+                                      >
+                                        {
+                                          userItineraries.find(
+                                            (it) => it.id === viewItineraryId
+                                          ).budget
+                                        }
+                                      </Typography>
+                                    </Box>
+                                  </Grid>
+                                  <Grid item xs={12} sm={6}>
+                                    <Box
+                                      display="flex"
+                                      alignItems="center"
+                                      mb={0.5}
                                     >
-                                      Collaborative:
-                                    </Typography>
-                                  </Box>
-                                  <Chip
-                                    label={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative
-                                        ? "Yes"
-                                        : "No"
-                                    }
-                                    size="small"
-                                    color={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative
-                                        ? "success"
-                                        : "default"
-                                    }
-                                    sx={{
-                                      fontSize: "0.8rem", // Slightly smaller chip font size
-                                    }}
-                                    icon={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative ? (
-                                        <CheckIcon
+                                      <CategoryIcon
+                                        sx={{ mr: 1, color: "#78909c" }}
+                                      />
+                                      <Typography
+                                        variant="subtitle1"
+                                        sx={{
+                                          fontWeight: "bold",
+                                          color: "#546e7a",
+                                          fontSize: "1rem",
+                                        }} // Adjusted subtitle size
+                                      >
+                                        Category:
+                                      </Typography>
+                                    </Box>
+                                    <Chip
+                                      label={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).category
+                                      }
+                                      size="small"
+                                      sx={{
+                                        backgroundColor: "#ffe0b2",
+                                        color: "#ef6c00",
+                                        fontWeight: "bold",
+                                        fontSize: "0.8rem", // Slightly smaller chip font size
+                                      }}
+                                      icon={
+                                        <LabelIcon
                                           style={{
+                                            color: "#ef6c00",
                                             fontSize: "1rem", // Adjusted chip icon size
                                           }}
                                         />
-                                      ) : null
-                                    }
-                                  />
-                                </Grid>
-                              </Grid>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                        <Grid item xs={12}>
-                          {" "}
-                          {/* Description Section - Full width on all devices */}
-                          <Card
-                            elevation={2}
-                            sx={{
-                              borderRadius: "10px",
-                              backgroundColor: "#e8f5e9",
-                            }}
-                          >
-                            <CardContent
-                              sx={{ padding: { xs: "12px", sm: "16px" } }}
-                            >
-                              {" "}
-                              {/* Responsive padding inside CardContent */}
-                              <Typography
-                                variant="h6"
-                                sx={{
-                                  fontWeight: "bold",
-                                  mb: 1.5, // Slightly increased margin bottom
-                                  color: "#455a64",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  fontSize: "1.3rem", // Adjusted section title size
-                                }}
-                              >
-                                <DescriptionIcon
-                                  sx={{ mr: 1, color: "#81c784" }}
-                                />{" "}
-                                Description
-                              </Typography>
-                              <Typography
-                                variant="body1"
-                                sx={{
-                                  color: "#607d8b",
-                                  fontSize: "0.9rem", // Slightly reduced body text size
-                                }}
-                              >
-                                {
-                                  userItineraries.find(
-                                    (it) => it.id === viewItineraryId
-                                  ).description
-                                }
-                              </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                        {userItineraries.find((it) => it.id === viewItineraryId)
-                          .customFields.length > 0 && (
-                          <Grid item xs={12}>
-                            {" "}
-                            {/* Custom Fields Section - Full width on all devices */}
-                            <Card
-                              elevation={2}
-                              sx={{
-                                borderRadius: "10px",
-                                backgroundColor: "#fce4ec",
-                              }}
-                            >
-                              <CardContent
-                                sx={{ padding: { xs: "12px", sm: "16px" } }}
-                              >
-                                {" "}
-                                {/* Responsive padding inside CardContent */}
-                                <Typography
-                                  variant="h6"
-                                  sx={{
-                                    fontWeight: "bold",
-                                    mb: 1.5, // Slightly increased margin bottom
-                                    color: "#455a64",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    fontSize: "1.3rem", // Adjusted section title size
-                                  }}
-                                >
-                                  <TextFieldsIcon
-                                    sx={{ mr: 1, color: "#f06292" }}
-                                  />{" "}
-                                  Custom Fields
-                                </Typography>
-                                <List dense>
-                                  {userItineraries
-                                    .find((it) => it.id === viewItineraryId)
-                                    .customFields.map((field, index) => (
-                                      <ListItem
-                                        key={index}
-                                        disableGutters
+                                      }
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={6}>
+                                    <Box
+                                      display="flex"
+                                      alignItems="center"
+                                      mb={0.5}
+                                    >
+                                      <PeopleIcon
+                                        sx={{ mr: 1, color: "#78909c" }}
+                                      />
+                                      <Typography
+                                        variant="subtitle1"
                                         sx={{
-                                          padding: "6px 0",
-                                          borderBottom: "1px dashed #f8bbd0",
-                                        }}
+                                          fontWeight: "bold",
+                                          color: "#546e7a",
+                                          fontSize: "1rem",
+                                        }} // Adjusted subtitle size
                                       >
-                                        <ListItemText
-                                          primary={`${field.label}:`}
-                                          secondary={field.value}
-                                          primaryTypographyProps={{
-                                            variant: "subtitle2",
-                                            fontWeight: "bold",
-                                            color: "#546e7a",
-                                            fontSize: "0.9rem", // Slightly reduced subtitle size
-                                          }}
-                                          secondaryTypographyProps={{
-                                            variant: "body2",
-                                            color: "#607d8b",
-                                            fontSize: "0.85rem", // Further reduced secondary text size
-                                          }}
-                                        />
-                                      </ListItem>
-                                    ))}
-                                </List>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                        )}
-                        {userItineraries.find((it) => it.id === viewItineraryId)
-                          .collaborators.length > 0 && (
-                          <Grid item xs={12}>
-                            {" "}
-                            {/* Collaborators Section - Full width on all devices */}
-                            <Card
-                              elevation={2}
-                              sx={{
-                                borderRadius: "10px",
-                                backgroundColor: "#ede7f6",
-                              }}
-                            >
-                              <CardContent
-                                sx={{ padding: { xs: "12px", sm: "16px" } }}
-                              >
-                                {" "}
-                                {/* Responsive padding inside CardContent */}
-                                <Typography
-                                  variant="h6"
-                                  sx={{
-                                    fontWeight: "bold",
-                                    mb: 1.5, // Slightly increased margin bottom
-                                    color: "#455a64",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    fontSize: "1.3rem", // Adjusted section title size
-                                  }}
-                                >
-                                  <ShareIcon sx={{ mr: 1, color: "#9575cd" }} />{" "}
-                                  Collaborators
-                                </Typography>
-                                <List dense>
-                                  {userItineraries
-                                    .find((it) => it.id === viewItineraryId)
-                                    .collaborators.map(
-                                      (collaborator, index) => (
-                                        <ListItem
-                                          key={index}
-                                          disableGutters
-                                          sx={{
-                                            padding: "6px 0",
-                                            borderBottom: "1px dashed #d1c4e9",
-                                          }}
-                                        >
-                                          <ListItemIcon
-                                            sx={{ minWidth: "auto", mr: 1 }}
-                                          >
-                                            <AccountCircleIcon
-                                              sx={{
-                                                color: "#7e57c2",
-                                                fontSize: "1.3rem", // Adjusted icon size
-                                              }}
-                                            />
-                                          </ListItemIcon>
-                                          <ListItemText
-                                            primary={collaborator}
-                                            primaryTypographyProps={{
-                                              variant: "body1",
-                                              color: "#607d8b",
-                                              fontSize: "0.9rem", // Slightly reduced body text size
+                                        Collaborative:
+                                      </Typography>
+                                    </Box>
+                                    <Chip
+                                      label={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative
+                                          ? "Yes"
+                                          : "No"
+                                      }
+                                      size="small"
+                                      color={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative
+                                          ? "success"
+                                          : "default"
+                                      }
+                                      sx={{
+                                        fontSize: "0.8rem", // Slightly smaller chip font size
+                                      }}
+                                      icon={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative ? (
+                                          <CheckIcon
+                                            style={{
+                                              fontSize: "1rem", // Adjusted chip icon size
                                             }}
                                           />
-                                        </ListItem>
-                                      )
-                                    )}
-                                </List>
+                                        ) : null
+                                      }
+                                    />
+                                  </Grid>
+                                </Grid>
                               </CardContent>
                             </Card>
                           </Grid>
-                        )}
-                        <Grid item xs={12}>
-                          {" "}
-                          {/* Destinations Section - Full width on all devices */}
-                          <Typography
-                            variant="h5"
-                            sx={{
-                              mt: 3,
-                              fontWeight: "bold",
-                              mb: 2,
-                              color: "#37474f",
-                              display: "flex",
-                              alignItems: "center",
-                              fontSize: "1.6rem", // Adjusted section title size
-                            }}
-                          >
-                            <PinDropIcon
+                          <Grid item xs={12}>
+                            {" "}
+                            {/* Description Section - Full width on all devices */}
+                            <Card
+                              elevation={2}
                               sx={{
-                                mr: 1,
-                                fontSize: "1.6rem", // Adjusted icon size
-                                color: "#f57c00",
+                                borderRadius: "10px",
+                                backgroundColor: "#e8f5e9",
                               }}
-                            />{" "}
-                            Destinations
-                          </Typography>
-                          {userItineraries
-                            .find((it) => it.id === viewItineraryId)
-                            .destinations.map((destination, index) => (
+                            >
+                              <CardContent
+                                sx={{ padding: { xs: "12px", sm: "16px" } }}
+                              >
+                                {" "}
+                                {/* Responsive padding inside CardContent */}
+                                <Typography
+                                  variant="h6"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    mb: 1.5, // Slightly increased margin bottom
+                                    color: "#455a64",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    fontSize: "1.3rem", // Adjusted section title size
+                                  }}
+                                >
+                                  <DescriptionIcon
+                                    sx={{ mr: 1, color: "#81c784" }}
+                                  />{" "}
+                                  Description
+                                </Typography>
+                                <Typography
+                                  variant="body1"
+                                  sx={{
+                                    color: "#607d8b",
+                                    fontSize: "0.9rem", // Slightly reduced body text size
+                                  }}
+                                >
+                                  {
+                                    userItineraries.find(
+                                      (it) => it.id === viewItineraryId
+                                    ).description
+                                  }
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          {userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).customFields.length > 0 && (
+                            <Grid item xs={12}>
+                              {" "}
+                              {/* Custom Fields Section - Full width on all devices */}
                               <Card
-                                key={index}
                                 elevation={2}
                                 sx={{
-                                  mb: 2,
                                   borderRadius: "10px",
-                                  backgroundColor: "#e0f7fa",
+                                  backgroundColor: "#fce4ec",
                                 }}
                               >
                                 <CardContent
@@ -2126,771 +2039,884 @@ const ItineraryPlanner = () => {
                                   {/* Responsive padding inside CardContent */}
                                   <Typography
                                     variant="h6"
-                                    component="h3"
                                     sx={{
                                       fontWeight: "bold",
-                                      mb: 1,
-                                      color: "#2e7d32",
+                                      mb: 1.5, // Slightly increased margin bottom
+                                      color: "#455a64",
                                       display: "flex",
                                       alignItems: "center",
-                                      fontSize: "1.4rem", // Adjusted destination title size
+                                      fontSize: "1.3rem", // Adjusted section title size
                                     }}
                                   >
-                                    <LocationOnIcon
-                                      sx={{
-                                        mr: 1,
-                                        color: "#4db6ac",
-                                        fontSize: "1.6rem", // Adjusted icon size
-                                      }}
+                                    <TextFieldsIcon
+                                      sx={{ mr: 1, color: "#f06292" }}
                                     />{" "}
-                                    {destination.name}
+                                    Custom Fields
                                   </Typography>
-                                  <Typography
-                                    variant="subtitle1"
-                                    sx={{
-                                      mb: 1,
-                                      color: "#424242",
-                                      fontSize: "0.9rem", // Slightly reduced subtitle size
-                                    }}
-                                  >
-                                    <CalendarMonthIcon
-                                      sx={{
-                                        mr: 0.5,
-                                        verticalAlign: "middle",
-                                        color: "#4dd0e1",
-                                        fontSize: "1rem", // Adjusted icon size
-                                      }}
-                                    />{" "}
-                                    {moment(destination.startDate).format("LL")}{" "}
-                                    - {moment(destination.endDate).format("LL")}
-                                  </Typography>
-                                  <Grid container spacing={2}>
-                                    {" "}
-                                    {/* Grid for Activities, Expenses, Reminders and Chart */}
-                                    <Grid item xs={12} md={6}>
-                                      {" "}
-                                      {/* Left side for lists - Take full width on small devices, half on medium+ */}
-                                      {destination.activities &&
-                                        destination.activities.length > 0 && (
-                                          <Box
-                                            sx={{
-                                              mt: 1,
-                                              mb: 1,
-                                              borderRadius: "8px",
-                                              padding: "12px",
-                                              backgroundColor: "#e0f7fa",
+                                  <List dense>
+                                    {userItineraries
+                                      .find((it) => it.id === viewItineraryId)
+                                      .customFields.map((field, index) => (
+                                        <ListItem
+                                          key={index}
+                                          disableGutters
+                                          sx={{
+                                            padding: "6px 0",
+                                            borderBottom: "1px dashed #f8bbd0",
+                                          }}
+                                        >
+                                          <ListItemText
+                                            primary={`${field.label}:`}
+                                            secondary={field.value}
+                                            primaryTypographyProps={{
+                                              variant: "subtitle2",
+                                              fontWeight: "bold",
+                                              color: "#546e7a",
+                                              fontSize: "0.9rem", // Slightly reduced subtitle size
                                             }}
-                                          >
-                                            <Typography
-                                              variant="subtitle2"
-                                              sx={{
-                                                fontWeight: "bold",
-                                                mb: 0.5,
-                                                color: "#00796b",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                fontSize: "1rem", // Adjusted subtitle size
-                                              }}
-                                            >
-                                              <DirectionsRunIcon
-                                                sx={{
-                                                  mr: 1,
-                                                  color: "#26a69a",
-                                                  fontSize: "1.3rem", // Adjusted icon size
-                                                }}
-                                              />{" "}
-                                              Activities
-                                            </Typography>
-                                            <List dense sx={{ padding: 0 }}>
-                                              {destination.activities.map(
-                                                (activity, activityIndex) => (
-                                                  <ListItem
-                                                    key={activityIndex}
-                                                    disableGutters
-                                                    sx={{
-                                                      padding: "4px 0",
-                                                      borderBottom:
-                                                        "1px dashed #b2dfdb",
-                                                    }}
-                                                  >
-                                                    <ListItemText
-                                                      primary={`${
-                                                        activity.title
-                                                      } (${activity.type}) - ${
-                                                        activity.time
-                                                          ? moment(
-                                                              activity.time,
-                                                              "HH:mm"
-                                                            ).format("h:mm A")
-                                                          : ""
-                                                      } ${
-                                                        activity.date
-                                                          ? moment(
-                                                              activity.date
-                                                            ).format("LL")
-                                                          : ""
-                                                      } - Cost: ${
-                                                        activity.cost || "N/A"
-                                                      }`}
-                                                      secondary={activity.notes}
-                                                      primaryTypographyProps={{
-                                                        variant: "body2",
-                                                        color: "#424242",
-                                                        fontWeight: "medium",
-                                                        fontSize: "0.85rem", // Further reduced primary text size
-                                                      }}
-                                                      secondaryTypographyProps={{
-                                                        variant: "body2",
-                                                        color: "#616161",
-                                                        fontSize: "0.8rem", // Further reduced secondary text size
-                                                      }}
-                                                    />
-                                                  </ListItem>
-                                                )
-                                              )}
-                                            </List>
-                                          </Box>
-                                        )}
-                                      {destination.expenses &&
-                                        destination.expenses.length > 0 && (
-                                          <Box
-                                            sx={{
-                                              mt: 1,
-                                              mb: 1,
-                                              borderRadius: "8px",
-                                              padding: "12px",
-                                              backgroundColor: "#e0f7fa",
+                                            secondaryTypographyProps={{
+                                              variant: "body2",
+                                              color: "#607d8b",
+                                              fontSize: "0.85rem", // Further reduced secondary text size
                                             }}
-                                          >
-                                            <Typography
-                                              variant="subtitle2"
-                                              sx={{
-                                                fontWeight: "bold",
-                                                mb: 0.5,
-                                                color: "#00796b",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                fontSize: "1rem", // Adjusted subtitle size
-                                              }}
-                                            >
-                                              <ShoppingCartIcon
-                                                sx={{
-                                                  mr: 1,
-                                                  color: "#26a69a",
-                                                  fontSize: "1.3rem", // Adjusted icon size
-                                                }}
-                                              />{" "}
-                                              Expenses
-                                            </Typography>
-                                            <List dense sx={{ padding: 0 }}>
-                                              {destination.expenses.map(
-                                                (expense, expenseIndex) => (
-                                                  <ListItem
-                                                    key={expenseIndex}
-                                                    disableGutters
-                                                    sx={{
-                                                      padding: "4px 0",
-                                                      borderBottom:
-                                                        "1px dashed #b2dfdb",
-                                                    }}
-                                                  >
-                                                    <ListItemText
-                                                      primary={`${
-                                                        expense.item
-                                                      } (${
-                                                        expense.category
-                                                      }) - Amount: ${
-                                                        expense.amount
-                                                      } - ${
-                                                        expense.date
-                                                          ? moment(
-                                                              expense.date
-                                                            ).format("LL")
-                                                          : ""
-                                                      } ${
-                                                        expense.time
-                                                          ? moment(
-                                                              expense.time,
-                                                              "HH:mm"
-                                                            ).format("h:mm A")
-                                                          : ""
-                                                      }`}
-                                                      primaryTypographyProps={{
-                                                        variant: "body2",
-                                                        color: "#424242",
-                                                        fontWeight: "medium",
-                                                        fontSize: "0.85rem", // Further reduced primary text size
-                                                      }}
-                                                    />
-                                                  </ListItem>
-                                                )
-                                              )}
-                                            </List>
-                                          </Box>
-                                        )}
-                                      {destination.reminders &&
-                                        destination.reminders.length > 0 && (
-                                          <Box
-                                            sx={{
-                                              mt: 1,
-                                              borderRadius: "8px",
-                                              padding: "12px",
-                                              backgroundColor: "#e0f7fa",
-                                            }}
-                                          >
-                                            <Typography
-                                              variant="subtitle2"
-                                              sx={{
-                                                fontWeight: "bold",
-                                                mb: 0.5,
-                                                color: "#00796b",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                fontSize: "1rem", // Adjusted subtitle size
-                                              }}
-                                            >
-                                              <AlarmIcon
-                                                sx={{
-                                                  mr: 1,
-                                                  color: "#26a69a",
-                                                  fontSize: "1.3rem", // Adjusted icon size
-                                                }}
-                                              />{" "}
-                                              Reminders
-                                            </Typography>
-                                            <List dense sx={{ padding: 0 }}>
-                                              {destination.reminders.map(
-                                                (reminder, reminderIndex) => (
-                                                  <ListItem
-                                                    key={reminderIndex}
-                                                    disableGutters
-                                                    sx={{
-                                                      padding: "4px 0",
-                                                      borderBottom:
-                                                        "1px dashed #b2dfdb",
-                                                    }}
-                                                  >
-                                                    <ListItemText
-                                                      primary={`${
-                                                        reminder.title
-                                                      } (${reminder.type}) - ${
-                                                        reminder.date
-                                                          ? moment(
-                                                              reminder.date
-                                                            ).format("LL")
-                                                          : ""
-                                                      } ${
-                                                        reminder.time
-                                                          ? moment(
-                                                              reminder.time,
-                                                              "HH:mm"
-                                                            ).format("h:mm A")
-                                                          : ""
-                                                      }`}
-                                                      primaryTypographyProps={{
-                                                        variant: "body2",
-                                                        color: "#424242",
-                                                        fontWeight: "medium",
-                                                        fontSize: "0.85rem", // Further reduced primary text size
-                                                      }}
-                                                    />
-                                                  </ListItem>
-                                                )
-                                              )}
-                                            </List>
-                                          </Box>
-                                        )}
-                                    </Grid>
-                                    <Grid item xs={12} md={6}>
-                                      {" "}
-                                      {/* Right side for Budget Chart - Take full width on small devices, half on medium+ */}
-                                      <Box sx={{ mt: 2 }}>
-                                        {" "}
-                                        {/* Add some top margin to align with lists on the left */}
-                                        <BudgetChart
-                                          expenses={destination.expenses}
-                                          activities={destination.activities}
-                                          budget={
-                                            userItineraries.find(
-                                              (it) => it.id === viewItineraryId
-                                            ).budget
-                                          } // Access budget from itinerary
-                                        />
-                                      </Box>
-                                    </Grid>
-                                  </Grid>
+                                          />
+                                        </ListItem>
+                                      ))}
+                                  </List>
                                 </CardContent>
                               </Card>
-                            ))}
-                        </Grid>
-                      </Grid>{" "}
-                      {/* End Main Grid Container */}
-                    </Box>
-                  )}
-              </DialogContent>
-            </Dialog>
+                            </Grid>
+                          )}
+                          {userItineraries.find(
+                            (it) => it.id === viewItineraryId
+                          ).collaborators.length > 0 && (
+                            <Grid item xs={12}>
+                              {" "}
+                              {/* Collaborators Section - Full width on all devices */}
+                              <Card
+                                elevation={2}
+                                sx={{
+                                  borderRadius: "10px",
+                                  backgroundColor: "#ede7f6",
+                                }}
+                              >
+                                <CardContent
+                                  sx={{ padding: { xs: "12px", sm: "16px" } }}
+                                >
+                                  {" "}
+                                  {/* Responsive padding inside CardContent */}
+                                  <Typography
+                                    variant="h6"
+                                    sx={{
+                                      fontWeight: "bold",
+                                      mb: 1.5, // Slightly increased margin bottom
+                                      color: "#455a64",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      fontSize: "1.3rem", // Adjusted section title size
+                                    }}
+                                  >
+                                    <ShareIcon
+                                      sx={{ mr: 1, color: "#9575cd" }}
+                                    />{" "}
+                                    Collaborators
+                                  </Typography>
+                                  <List dense>
+                                    {userItineraries
+                                      .find((it) => it.id === viewItineraryId)
+                                      .collaborators.map(
+                                        (collaborator, index) => (
+                                          <ListItem
+                                            key={index}
+                                            disableGutters
+                                            sx={{
+                                              padding: "6px 0",
+                                              borderBottom:
+                                                "1px dashed #d1c4e9",
+                                            }}
+                                          >
+                                            <ListItemIcon
+                                              sx={{ minWidth: "auto", mr: 1 }}
+                                            >
+                                              <AccountCircleIcon
+                                                sx={{
+                                                  color: "#7e57c2",
+                                                  fontSize: "1.3rem", // Adjusted icon size
+                                                }}
+                                              />
+                                            </ListItemIcon>
+                                            <ListItemText
+                                              primary={collaborator}
+                                              primaryTypographyProps={{
+                                                variant: "body1",
+                                                color: "#607d8b",
+                                                fontSize: "0.9rem", // Slightly reduced body text size
+                                              }}
+                                            />
+                                          </ListItem>
+                                        )
+                                      )}
+                                  </List>
+                                </CardContent>
+                              </Card>
+                            </Grid>
+                          )}
+                          <Grid item xs={12}>
+                            {" "}
+                            {/* Destinations Section - Full width on all devices */}
+                            <Typography
+                              variant="h5"
+                              sx={{
+                                mt: 3,
+                                fontWeight: "bold",
+                                mb: 2,
+                                color: "#37474f",
+                                display: "flex",
+                                alignItems: "center",
+                                fontSize: "1.6rem", // Adjusted section title size
+                              }}
+                            >
+                              <PinDropIcon
+                                sx={{
+                                  mr: 1,
+                                  fontSize: "1.6rem", // Adjusted icon size
+                                  color: "#f57c00",
+                                }}
+                              />{" "}
+                              Destinations
+                            </Typography>
+                            {userItineraries
+                              .find((it) => it.id === viewItineraryId)
+                              .destinations.map((destination, index) => (
+                                <Card
+                                  key={index}
+                                  elevation={2}
+                                  sx={{
+                                    mb: 2,
+                                    borderRadius: "10px",
+                                    backgroundColor: "#e0f7fa",
+                                  }}
+                                >
+                                  <CardContent
+                                    sx={{ padding: { xs: "12px", sm: "16px" } }}
+                                  >
+                                    {" "}
+                                    {/* Responsive padding inside CardContent */}
+                                    <Typography
+                                      variant="h6"
+                                      component="h3"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        mb: 1,
+                                        color: "#2e7d32",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        fontSize: "1.4rem", // Adjusted destination title size
+                                      }}
+                                    >
+                                      <LocationOnIcon
+                                        sx={{
+                                          mr: 1,
+                                          color: "#4db6ac",
+                                          fontSize: "1.6rem", // Adjusted icon size
+                                        }}
+                                      />{" "}
+                                      {destination.name}
+                                    </Typography>
+                                    <Typography
+                                      variant="subtitle1"
+                                      sx={{
+                                        mb: 1,
+                                        color: "#424242",
+                                        fontSize: "0.9rem", // Slightly reduced subtitle size
+                                      }}
+                                    >
+                                      <CalendarMonthIcon
+                                        sx={{
+                                          mr: 0.5,
+                                          verticalAlign: "middle",
+                                          color: "#4dd0e1",
+                                          fontSize: "1rem", // Adjusted icon size
+                                        }}
+                                      />{" "}
+                                      {moment(destination.startDate).format(
+                                        "LL"
+                                      )}{" "}
+                                      -{" "}
+                                      {moment(destination.endDate).format("LL")}
+                                    </Typography>
+                                    <Grid container spacing={2}>
+                                      {" "}
+                                      {/* Grid for Activities, Expenses, Reminders and Chart */}
+                                      <Grid item xs={12} md={6}>
+                                        {" "}
+                                        {/* Left side for lists - Take full width on small devices, half on medium+ */}
+                                        {destination.activities &&
+                                          destination.activities.length > 0 && (
+                                            <Box
+                                              sx={{
+                                                mt: 1,
+                                                mb: 1,
+                                                borderRadius: "8px",
+                                                padding: "12px",
+                                                backgroundColor: "#e0f7fa",
+                                              }}
+                                            >
+                                              <Typography
+                                                variant="subtitle2"
+                                                sx={{
+                                                  fontWeight: "bold",
+                                                  mb: 0.5,
+                                                  color: "#00796b",
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  fontSize: "1rem", // Adjusted subtitle size
+                                                }}
+                                              >
+                                                <DirectionsRunIcon
+                                                  sx={{
+                                                    mr: 1,
+                                                    color: "#26a69a",
+                                                    fontSize: "1.3rem", // Adjusted icon size
+                                                  }}
+                                                />{" "}
+                                                Activities
+                                              </Typography>
+                                              <List dense sx={{ padding: 0 }}>
+                                                {destination.activities.map(
+                                                  (activity, activityIndex) => (
+                                                    <ListItem
+                                                      key={activityIndex}
+                                                      disableGutters
+                                                      sx={{
+                                                        padding: "4px 0",
+                                                        borderBottom:
+                                                          "1px dashed #b2dfdb",
+                                                      }}
+                                                    >
+                                                      <ListItemText
+                                                        primary={`${
+                                                          activity.title
+                                                        } (${
+                                                          activity.type
+                                                        }) - ${
+                                                          activity.time
+                                                            ? moment(
+                                                                activity.time,
+                                                                "HH:mm"
+                                                              ).format("h:mm A")
+                                                            : ""
+                                                        } ${
+                                                          activity.date
+                                                            ? moment(
+                                                                activity.date
+                                                              ).format("LL")
+                                                            : ""
+                                                        } - Cost: ${
+                                                          activity.cost || "N/A"
+                                                        }`}
+                                                        secondary={
+                                                          activity.notes
+                                                        }
+                                                        primaryTypographyProps={{
+                                                          variant: "body2",
+                                                          color: "#424242",
+                                                          fontWeight: "medium",
+                                                          fontSize: "0.85rem", // Further reduced primary text size
+                                                        }}
+                                                        secondaryTypographyProps={{
+                                                          variant: "body2",
+                                                          color: "#616161",
+                                                          fontSize: "0.8rem", // Further reduced secondary text size
+                                                        }}
+                                                      />
+                                                    </ListItem>
+                                                  )
+                                                )}
+                                              </List>
+                                            </Box>
+                                          )}
+                                        {destination.expenses &&
+                                          destination.expenses.length > 0 && (
+                                            <Box
+                                              sx={{
+                                                mt: 1,
+                                                mb: 1,
+                                                borderRadius: "8px",
+                                                padding: "12px",
+                                                backgroundColor: "#e0f7fa",
+                                              }}
+                                            >
+                                              <Typography
+                                                variant="subtitle2"
+                                                sx={{
+                                                  fontWeight: "bold",
+                                                  mb: 0.5,
+                                                  color: "#00796b",
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  fontSize: "1rem", // Adjusted subtitle size
+                                                }}
+                                              >
+                                                <ShoppingCartIcon
+                                                  sx={{
+                                                    mr: 1,
+                                                    color: "#26a69a",
+                                                    fontSize: "1.3rem", // Adjusted icon size
+                                                  }}
+                                                />{" "}
+                                                Expenses
+                                              </Typography>
+                                              <List dense sx={{ padding: 0 }}>
+                                                {destination.expenses.map(
+                                                  (expense, expenseIndex) => (
+                                                    <ListItem
+                                                      key={expenseIndex}
+                                                      disableGutters
+                                                      sx={{
+                                                        padding: "4px 0",
+                                                        borderBottom:
+                                                          "1px dashed #b2dfdb",
+                                                      }}
+                                                    >
+                                                      <ListItemText
+                                                        primary={`${
+                                                          expense.item
+                                                        } (${
+                                                          expense.category
+                                                        }) - Amount: ${
+                                                          expense.amount
+                                                        } - ${
+                                                          expense.date
+                                                            ? moment(
+                                                                expense.date
+                                                              ).format("LL")
+                                                            : ""
+                                                        } ${
+                                                          expense.time
+                                                            ? moment(
+                                                                expense.time,
+                                                                "HH:mm"
+                                                              ).format("h:mm A")
+                                                            : ""
+                                                        }`}
+                                                        primaryTypographyProps={{
+                                                          variant: "body2",
+                                                          color: "#424242",
+                                                          fontWeight: "medium",
+                                                          fontSize: "0.85rem", // Further reduced primary text size
+                                                        }}
+                                                      />
+                                                    </ListItem>
+                                                  )
+                                                )}
+                                              </List>
+                                            </Box>
+                                          )}
+                                        {destination.reminders &&
+                                          destination.reminders.length > 0 && (
+                                            <Box
+                                              sx={{
+                                                mt: 1,
+                                                borderRadius: "8px",
+                                                padding: "12px",
+                                                backgroundColor: "#e0f7fa",
+                                              }}
+                                            >
+                                              <Typography
+                                                variant="subtitle2"
+                                                sx={{
+                                                  fontWeight: "bold",
+                                                  mb: 0.5,
+                                                  color: "#00796b",
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  fontSize: "1rem", // Adjusted subtitle size
+                                                }}
+                                              >
+                                                <AlarmIcon
+                                                  sx={{
+                                                    mr: 1,
+                                                    color: "#26a69a",
+                                                    fontSize: "1.3rem", // Adjusted icon size
+                                                  }}
+                                                />{" "}
+                                                Reminders
+                                              </Typography>
+                                              <List dense sx={{ padding: 0 }}>
+                                                {destination.reminders.map(
+                                                  (reminder, reminderIndex) => (
+                                                    <ListItem
+                                                      key={reminderIndex}
+                                                      disableGutters
+                                                      sx={{
+                                                        padding: "4px 0",
+                                                        borderBottom:
+                                                          "1px dashed #b2dfdb",
+                                                      }}
+                                                    >
+                                                      <ListItemText
+                                                        primary={`${
+                                                          reminder.title
+                                                        } (${
+                                                          reminder.type
+                                                        }) - ${
+                                                          reminder.date
+                                                            ? moment(
+                                                                reminder.date
+                                                              ).format("LL")
+                                                            : ""
+                                                        } ${
+                                                          reminder.time
+                                                            ? moment(
+                                                                reminder.time,
+                                                                "HH:mm"
+                                                              ).format("h:mm A")
+                                                            : ""
+                                                        }`}
+                                                        primaryTypographyProps={{
+                                                          variant: "body2",
+                                                          color: "#424242",
+                                                          fontWeight: "medium",
+                                                          fontSize: "0.85rem", // Further reduced primary text size
+                                                        }}
+                                                      />
+                                                    </ListItem>
+                                                  )
+                                                )}
+                                              </List>
+                                            </Box>
+                                          )}
+                                      </Grid>
+                                      <Grid item xs={12} md={6}>
+                                        {" "}
+                                        {/* Right side for Budget Chart - Take full width on small devices, half on medium+ */}
+                                        <Box sx={{ mt: 2 }}>
+                                          {" "}
+                                          {/* Add some top margin to align with lists on the left */}
+                                          <BudgetChart
+                                            expenses={destination.expenses}
+                                            activities={destination.activities}
+                                            budget={
+                                              userItineraries.find(
+                                                (it) =>
+                                                  it.id === viewItineraryId
+                                              ).budget
+                                            } // Access budget from itinerary
+                                          />
+                                        </Box>
+                                      </Grid>
+                                    </Grid>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                          </Grid>
+                        </Grid>{" "}
+                        {/* End Main Grid Container */}
+                      </Box>
+                    )}
+                </DialogContent>
+              </Dialog>
 
-            <Dialog
-              open={openModal}
-              onClose={resetModal}
-              maxWidth="lg"
-              fullWidth
-              scroll="paper"
-            >
-              <DialogTitle>
-                {editItineraryId ? "Edit Itinerary" : "Create New Itinerary"}
-              </DialogTitle>
-              <DialogContent dividers sx={{ p: 0, m: 0 }}>
-                <Tabs
-                  value={activeTab}
-                  onChange={(e, newValue) => setActiveTab(newValue)}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  allowScrollButtonsMobile
-                  sx={{ mb: 2 }}
-                  indicatorColor="primary"
-                  textColor="primary"
-                >
-                  <Tab label="Basic Info" />
-                  <Tab label="Destinations" />
-                  <Tab label="Sharing" />
-                </Tabs>
+              <Dialog
+                open={openModal}
+                onClose={resetModal}
+                maxWidth="lg"
+                fullWidth
+                scroll="paper"
+              >
+                <DialogTitle>
+                  {editItineraryId ? "Edit Itinerary" : "Create New Itinerary"}
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0, m: 0 }}>
+                  <Tabs
+                    value={activeTab}
+                    onChange={(e, newValue) => setActiveTab(newValue)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    allowScrollButtonsMobile
+                    sx={{ mb: 2 }}
+                    indicatorColor="primary"
+                    textColor="primary"
+                  >
+                    <Tab label="Basic Info" />
+                    <Tab label="Destinations" />
+                    <Tab label="Sharing" />
+                  </Tabs>
 
-                <TabPanel value={activeTab} index={0}>
-                  {/* Basic Info Form - Same as before */}
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        required
-                        label="Title"
-                        fullWidth
-                        value={currentItinerary.title}
-                        onChange={(e) =>
-                          handleItineraryInputChange("title", e.target.value)
-                        }
-                        error={!!formErrors.title}
-                        helperText={formErrors.title}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Description"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        value={currentItinerary.description}
-                        onChange={(e) =>
-                          handleItineraryInputChange(
-                            "description",
-                            e.target.value
-                          )
-                        }
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Start Date"
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        value={currentItinerary.startDate}
-                        onChange={(e) =>
-                          handleItineraryInputChange(
-                            "startDate",
-                            e.target.value
-                          )
-                        }
-                        error={!!formErrors.startDate}
-                        helperText={formErrors.startDate}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="End Date"
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        value={currentItinerary.endDate}
-                        onChange={(e) =>
-                          handleItineraryInputChange("endDate", e.target.value)
-                        }
-                        error={!!formErrors.endDate}
-                        helperText={formErrors.endDate}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Budget"
-                        type="number"
-                        fullWidth
-                        value={currentItinerary.budget}
-                        onChange={(e) =>
-                          handleItineraryInputChange("budget", e.target.value)
-                        }
-                        error={!!formErrors.budget}
-                        helperText={formErrors.budget}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Category</InputLabel>
-                        <Select
-                          value={currentItinerary.category}
-                          label="Category"
+                  <TabPanel value={activeTab} index={0}>
+                    {/* Basic Info Form - Same as before */}
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          required
+                          label="Title"
+                          fullWidth
+                          value={currentItinerary.title}
+                          onChange={(e) =>
+                            handleItineraryInputChange("title", e.target.value)
+                          }
+                          error={!!formErrors.title}
+                          helperText={formErrors.title}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Description"
+                          fullWidth
+                          multiline
+                          rows={3}
+                          value={currentItinerary.description}
                           onChange={(e) =>
                             handleItineraryInputChange(
-                              "category",
+                              "description",
                               e.target.value
                             )
                           }
-                        >
-                          {CATEGORIES.map((category) => (
-                            <MenuItem key={category} value={category}>
-                              {category}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={2}
-                      >
-                        <Typography sx={{ fontSize: "15px" }} component="h4">
-                          Custom Fields
-                        </Typography>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          startIcon={<AddIcon />}
-                          onClick={handleAddCustomField}
-                          style={{ fontSize: "12px" }}
-                        >
-                          Add Field
-                        </Button>
-                      </Box>
-                      {currentItinerary.customFields.map((field, index) => (
-                        <Box
-                          key={index}
-                          display="flex"
-                          gap={2}
-                          mb={2}
-                          alignItems="center"
-                        >
-                          <TextField
-                            label="Field Label"
-                            value={field.label}
-                            sx={{ flexGrow: 1 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Start Date"
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          value={currentItinerary.startDate}
+                          onChange={(e) =>
+                            handleItineraryInputChange(
+                              "startDate",
+                              e.target.value
+                            )
+                          }
+                          error={!!formErrors.startDate}
+                          helperText={formErrors.startDate}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="End Date"
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          value={currentItinerary.endDate}
+                          onChange={(e) =>
+                            handleItineraryInputChange(
+                              "endDate",
+                              e.target.value
+                            )
+                          }
+                          error={!!formErrors.endDate}
+                          helperText={formErrors.endDate}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Budget"
+                          type="number"
+                          fullWidth
+                          value={currentItinerary.budget}
+                          onChange={(e) =>
+                            handleItineraryInputChange("budget", e.target.value)
+                          }
+                          error={!!formErrors.budget}
+                          helperText={formErrors.budget}
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Category</InputLabel>
+                          <Select
+                            value={currentItinerary.category}
+                            label="Category"
                             onChange={(e) =>
-                              handleCustomFieldChange(
-                                index,
-                                "label",
+                              handleItineraryInputChange(
+                                "category",
                                 e.target.value
                               )
                             }
-                          />
-                          <TextField
-                            label="Field Value"
-                            value={field.value}
-                            sx={{ flexGrow: 1 }}
-                            onChange={(e) =>
-                              handleCustomFieldChange(
-                                index,
-                                "value",
-                                e.target.value
-                              )
-                            }
-                          />
-                          <IconButton
-                            color="error"
-                            onClick={() => removeCustomField(index)}
                           >
-                            <CloseIcon />
-                          </IconButton>
-                        </Box>
-                      ))}
-                    </Grid>
-                  </Grid>
-                </TabPanel>
-
-                <TabPanel value={activeTab} index={1}>
-                  {/* Destinations Tab - Same as before */}
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddDestination}
-                    sx={{ mb: 2 }}
-                  >
-                    Add Destination
-                  </Button>
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="destinations">
-                      {(provided) => (
+                            {CATEGORIES.map((category) => (
+                              <MenuItem key={category} value={category}>
+                                {category}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12}>
                         <Box
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
+                          display="flex"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          mb={2}
                         >
-                          {currentItinerary.destinations.map(
-                            (destination, destinationIndex) => (
-                              <Draggable
-                                key={destination.id}
-                                draggableId={destination.id}
-                                index={destinationIndex}
-                              >
-                                {(provided) => (
-                                  <Card
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    elevation={2}
-                                    sx={{ p: 1, mb: 2 }}
-                                  >
-                                    <Box
-                                      {...provided.dragHandleProps}
-                                      sx={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        mb: 1,
-                                      }}
+                          <Typography sx={{ fontSize: "15px" }} component="h4">
+                            Custom Fields
+                          </Typography>
+                          <Button
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<AddIcon />}
+                            onClick={handleAddCustomField}
+                            style={{ fontSize: "12px" }}
+                          >
+                            Add Field
+                          </Button>
+                        </Box>
+                        {currentItinerary.customFields.map((field, index) => (
+                          <Box
+                            key={index}
+                            display="flex"
+                            gap={2}
+                            mb={2}
+                            alignItems="center"
+                          >
+                            <TextField
+                              label="Field Label"
+                              value={field.label}
+                              sx={{ flexGrow: 1 }}
+                              onChange={(e) =>
+                                handleCustomFieldChange(
+                                  index,
+                                  "label",
+                                  e.target.value
+                                )
+                              }
+                            />
+                            <TextField
+                              label="Field Value"
+                              value={field.value}
+                              sx={{ flexGrow: 1 }}
+                              onChange={(e) =>
+                                handleCustomFieldChange(
+                                  index,
+                                  "value",
+                                  e.target.value
+                                )
+                              }
+                            />
+                            <IconButton
+                              color="error"
+                              onClick={() => removeCustomField(index)}
+                            >
+                              <CloseIcon />
+                            </IconButton>
+                          </Box>
+                        ))}
+                      </Grid>
+                    </Grid>
+                  </TabPanel>
+
+                  <TabPanel value={activeTab} index={1}>
+                    {/* Destinations Tab - Same as before */}
+                    <Button
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddDestination}
+                      sx={{ mb: 2 }}
+                    >
+                      Add Destination
+                    </Button>
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId="destinations">
+                        {(provided) => (
+                          <Box
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                          >
+                            {currentItinerary.destinations.map(
+                              (destination, destinationIndex) => (
+                                <Draggable
+                                  key={destination.id}
+                                  draggableId={destination.id}
+                                  index={destinationIndex}
+                                >
+                                  {(provided) => (
+                                    <Card
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      elevation={2}
+                                      sx={{ p: 1, mb: 2 }}
                                     >
-                                      <Typography variant="h6">
-                                        Destination {destinationIndex + 1}
-                                      </Typography>
-                                      <IconButton
-                                        color="error"
-                                        onClick={() =>
-                                          handleDeleteDestination(
-                                            destinationIndex
-                                          )
-                                        }
+                                      <Box
+                                        {...provided.dragHandleProps}
+                                        sx={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "space-between",
+                                          mb: 1,
+                                        }}
                                       >
-                                        <DeleteIcon />
-                                      </IconButton>
-                                    </Box>
-                                    <Grid container spacing={2}>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="Destination Name"
-                                          fullWidth
-                                          value={destination.name}
-                                          onChange={(e) =>
-                                            handleDestinationChange(
-                                              destinationIndex,
-                                              "name",
-                                              e.target.value
+                                        <Typography variant="h6">
+                                          Destination {destinationIndex + 1}
+                                        </Typography>
+                                        <IconButton
+                                          color="error"
+                                          onClick={() =>
+                                            handleDeleteDestination(
+                                              destinationIndex
                                             )
                                           }
-                                        />
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="Start Date"
-                                          type="date"
-                                          fullWidth
-                                          InputLabelProps={{ shrink: true }}
-                                          value={destination.startDate}
-                                          onChange={(e) =>
-                                            handleDestinationChange(
-                                              destinationIndex,
-                                              "startDate",
-                                              e.target.value
-                                            )
-                                          }
-                                        />
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <TextField
-                                          label="End Date"
-                                          type="date"
-                                          fullWidth
-                                          InputLabelProps={{ shrink: true }}
-                                          value={destination.endDate}
-                                          onChange={(e) =>
-                                            handleDestinationChange(
-                                              destinationIndex,
-                                              "endDate",
-                                              e.target.value
-                                            )
-                                          }
-                                        />
-                                      </Grid>
-
-                                      <Grid item xs={12}>
-                                        <Tabs
-                                          value={destination.activeSubTab || 0}
-                                          onChange={(e, newValue) =>
-                                            handleDestinationChange(
-                                              destinationIndex,
-                                              "activeSubTab",
-                                              newValue
-                                            )
-                                          }
-                                          variant="scrollable"
-                                          scrollButtons="auto"
-                                          allowScrollButtonsMobile
-                                          sx={{ mb: 2 }}
                                         >
-                                          <Tab label="Activities" />
-                                          <Tab label="Expenses" />
-                                          <Tab label="Reminders" />
-                                        </Tabs>
-                                      </Grid>
-
-                                      <Grid item md={8} xs={12}>
-                                        {destination.activeSubTab ===
-                                          0 /* Activities Panel - Same as before */ && (
-                                          <Box sx={{ mb: 2 }}>
-                                            <Button
-                                              variant="outlined"
-                                              onClick={() =>
-                                                handleAddActivity(
-                                                  destinationIndex
-                                                )
+                                          <DeleteIcon />
+                                        </IconButton>
+                                      </Box>
+                                      {/* ... Drag Handle ... */}
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={12}>
+                                          {/* StandaloneSearchBox is still here, inside Draggable */}
+                                          <StandaloneSearchBox
+                                            onLoad={(ref) =>
+                                              (searchBoxRef.current = ref)
+                                            }
+                                            onPlacesChanged={() => {
+                                              const places =
+                                                searchBoxRef.current.getPlaces();
+                                              if (places && places.length > 0) {
+                                                handleDestinationLocationSelect(
+                                                  destinationIndex,
+                                                  places[0]
+                                                );
                                               }
-                                              startIcon={<AddIcon />}
-                                            >
-                                              Add Activity
-                                            </Button>
-                                            <Droppable
-                                              droppableId={`destination-${destinationIndex}-activity`}
-                                            >
-                                              {(provided) => (
-                                                <Box
-                                                  {...provided.droppableProps}
-                                                  ref={provided.innerRef}
-                                                  sx={{ mb: 2 }}
-                                                >
-                                                  {destination.activities.map(
-                                                    (activity, index) => (
-                                                      <Draggable
-                                                        key={activity.id}
-                                                        draggableId={
-                                                          activity.id
-                                                        }
-                                                        index={index}
-                                                      >
-                                                        {(provided) => (
-                                                          <Card
-                                                            ref={
-                                                              provided.innerRef
-                                                            }
-                                                            {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
-                                                            elevation={1}
-                                                            sx={{ p: 1, mb: 1 }}
-                                                          >
-                                                            {/* Activity Form Fields - Same as before */}
-                                                            <Grid
-                                                              container
-                                                              spacing={1}
+                                            }}
+                                          >
+                                            <TextField
+                                              label="Search Destination"
+                                              fullWidth
+                                              placeholder="Enter a destination"
+                                              // defaultValue={destination.name} // REMOVE defaultValue
+                                              value={destination.name} // ADD value - make it controlled
+                                              onChange={(e) => {
+                                                // ADD onChange handler (optional, but good practice)
+                                                handleDestinationChange(
+                                                  destinationIndex,
+                                                  "name",
+                                                  e.target.value
+                                                );
+                                              }}
+                                            />
+                                          </StandaloneSearchBox>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <TextField
+                                            label="Start Date"
+                                            type="date"
+                                            fullWidth
+                                            InputLabelProps={{ shrink: true }}
+                                            value={destination.startDate}
+                                            onChange={(e) =>
+                                              handleDestinationChange(
+                                                destinationIndex,
+                                                "startDate",
+                                                e.target.value
+                                              )
+                                            }
+                                          />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <TextField
+                                            label="End Date"
+                                            type="date"
+                                            fullWidth
+                                            InputLabelProps={{ shrink: true }}
+                                            value={destination.endDate}
+                                            onChange={(e) =>
+                                              handleDestinationChange(
+                                                destinationIndex,
+                                                "endDate",
+                                                e.target.value
+                                              )
+                                            }
+                                          />
+                                        </Grid>
+
+                                        <Grid item xs={12}>
+                                          <Tabs
+                                            value={
+                                              destination.activeSubTab || 0
+                                            }
+                                            onChange={(e, newValue) =>
+                                              handleDestinationChange(
+                                                destinationIndex,
+                                                "activeSubTab",
+                                                newValue
+                                              )
+                                            }
+                                            variant="scrollable"
+                                            scrollButtons="auto"
+                                            allowScrollButtonsMobile
+                                            sx={{ mb: 2 }}
+                                          >
+                                            <Tab label="Activities" />
+                                            <Tab label="Expenses" />
+                                            <Tab label="Reminders" />
+                                          </Tabs>
+                                        </Grid>
+
+                                        <Grid item md={8} xs={12}>
+                                          {destination.activeSubTab ===
+                                            0 /* Activities Panel - Same as before */ && (
+                                            <Box sx={{ mb: 2 }}>
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddActivity(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Activity
+                                              </Button>
+                                              <Droppable
+                                                droppableId={`destination-${destinationIndex}-activity`}
+                                              >
+                                                {(provided) => (
+                                                  <Box
+                                                    {...provided.droppableProps}
+                                                    ref={provided.innerRef}
+                                                    sx={{ mb: 2 }}
+                                                  >
+                                                    {destination.activities.map(
+                                                      (activity, index) => (
+                                                        <Draggable
+                                                          key={activity.id}
+                                                          draggableId={
+                                                            activity.id
+                                                          }
+                                                          index={index}
+                                                        >
+                                                          {(provided) => (
+                                                            <Card
+                                                              ref={
+                                                                provided.innerRef
+                                                              }
+                                                              {...provided.draggableProps}
+                                                              {...provided.dragHandleProps}
+                                                              elevation={1}
+                                                              sx={{
+                                                                p: 1,
+                                                                mb: 1,
+                                                              }}
                                                             >
+                                                              {/* Activity Form Fields - Same as before */}
                                                               <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
+                                                                container
+                                                                spacing={1}
                                                               >
-                                                                <TextField
-                                                                  label="Activity Title"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  value={
-                                                                    activity.title
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index,
-                                                                      "title",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Date"
-                                                                  type="date"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    activity.date
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index,
-                                                                      "date",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Time"
-                                                                  type="time"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    activity.time
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index,
-                                                                      "time",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <FormControl
-                                                                  fullWidth
-                                                                  size="small"
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
                                                                 >
-                                                                  <InputLabel>
-                                                                    Type
-                                                                  </InputLabel>
-                                                                  <Select
+                                                                  <TextField
+                                                                    label="Activity Title"
+                                                                    size="small"
+                                                                    fullWidth
                                                                     value={
-                                                                      activity.type
+                                                                      activity.title
                                                                     }
-                                                                    label="Type"
                                                                     onChange={(
                                                                       e
                                                                     ) =>
@@ -2898,235 +2924,276 @@ const ItineraryPlanner = () => {
                                                                         destinationIndex,
                                                                         "activities",
                                                                         index,
-                                                                        "type",
+                                                                        "title",
                                                                         e.target
                                                                           .value
                                                                       )
                                                                     }
-                                                                  >
-                                                                    {ACTIVITY_TYPES.map(
-                                                                      (
-                                                                        type
-                                                                      ) => (
-                                                                        <MenuItem
-                                                                          key={
-                                                                            type
-                                                                          }
-                                                                          value={
-                                                                            type
-                                                                          }
-                                                                        >
-                                                                          {type}
-                                                                        </MenuItem>
-                                                                      )
-                                                                    )}
-                                                                  </Select>
-                                                                </FormControl>
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Cost"
-                                                                  type="number"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  value={
-                                                                    activity.cost
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index,
-                                                                      "cost",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                              >
-                                                                <TextField
-                                                                  label="Notes"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  multiline
-                                                                  rows={2}
-                                                                  value={
-                                                                    activity.notes
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index,
-                                                                      "notes",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sx={{
-                                                                  textAlign:
-                                                                    "right",
-                                                                }}
-                                                              >
-                                                                <IconButton
-                                                                  color="error"
-                                                                  size="small"
-                                                                  onClick={() =>
-                                                                    handleDeleteItem(
-                                                                      destinationIndex,
-                                                                      "activities",
-                                                                      index
-                                                                    )
-                                                                  }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
                                                                 >
-                                                                  <DeleteIcon />
-                                                                </IconButton>
-                                                              </Grid>
-                                                            </Grid>
-                                                          </Card>
-                                                        )}
-                                                      </Draggable>
-                                                    )
-                                                  )}
-                                                  {provided.placeholder}
-                                                </Box>
-                                              )}
-                                            </Droppable>
-                                          </Box>
-                                        )}
-
-                                        {destination.activeSubTab ===
-                                          1 /* Expenses Panel - Same as before */ && (
-                                          <Box sx={{ mb: 2 }}>
-                                            <Button
-                                              variant="outlined"
-                                              onClick={() =>
-                                                handleAddExpense(
-                                                  destinationIndex
-                                                )
-                                              }
-                                              startIcon={<AddIcon />}
-                                            >
-                                              Add Expense
-                                            </Button>
-                                            <Droppable
-                                              droppableId={`destination-${destinationIndex}-expense`}
-                                            >
-                                              {(provided) => (
-                                                <Box
-                                                  {...provided.droppableProps}
-                                                  ref={provided.innerRef}
-                                                  sx={{ mb: 2 }}
-                                                >
-                                                  {destination.expenses.map(
-                                                    (expense, index) => (
-                                                      <Draggable
-                                                        key={expense.id}
-                                                        draggableId={expense.id}
-                                                        index={index}
-                                                      >
-                                                        {(provided) => (
-                                                          <Card
-                                                            ref={
-                                                              provided.innerRef
-                                                            }
-                                                            {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
-                                                            elevation={1}
-                                                            sx={{ p: 1, mb: 1 }}
-                                                          >
-                                                            {/* Expense Form Fields - Same as before */}
-                                                            <Grid
-                                                              container
-                                                              spacing={1}
-                                                            >
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Item"
-                                                                  fullWidth
-                                                                  size="small"
-                                                                  value={
-                                                                    expense.item
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "expenses",
-                                                                      index,
-                                                                      "item",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Amount"
-                                                                  type="number"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  value={
-                                                                    expense.amount
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "expenses",
-                                                                      index,
-                                                                      "amount",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <FormControl
-                                                                  fullWidth
-                                                                  size="small"
-                                                                >
-                                                                  <InputLabel>
-                                                                    Category
-                                                                  </InputLabel>
-                                                                  <Select
+                                                                  <TextField
+                                                                    label="Date"
+                                                                    type="date"
+                                                                    size="small"
+                                                                    fullWidth
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
                                                                     value={
-                                                                      expense.category
+                                                                      activity.date
                                                                     }
-                                                                    label="Category"
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index,
+                                                                        "date",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Time"
+                                                                    type="time"
+                                                                    size="small"
+                                                                    fullWidth
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
+                                                                    value={
+                                                                      activity.time
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index,
+                                                                        "time",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <FormControl
+                                                                    fullWidth
+                                                                    size="small"
+                                                                  >
+                                                                    <InputLabel>
+                                                                      Type
+                                                                    </InputLabel>
+                                                                    <Select
+                                                                      value={
+                                                                        activity.type
+                                                                      }
+                                                                      label="Type"
+                                                                      onChange={(
+                                                                        e
+                                                                      ) =>
+                                                                        handleInputChange(
+                                                                          destinationIndex,
+                                                                          "activities",
+                                                                          index,
+                                                                          "type",
+                                                                          e
+                                                                            .target
+                                                                            .value
+                                                                        )
+                                                                      }
+                                                                    >
+                                                                      {ACTIVITY_TYPES.map(
+                                                                        (
+                                                                          type
+                                                                        ) => (
+                                                                          <MenuItem
+                                                                            key={
+                                                                              type
+                                                                            }
+                                                                            value={
+                                                                              type
+                                                                            }
+                                                                          >
+                                                                            {
+                                                                              type
+                                                                            }
+                                                                          </MenuItem>
+                                                                        )
+                                                                      )}
+                                                                    </Select>
+                                                                  </FormControl>
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Cost"
+                                                                    type="number"
+                                                                    size="small"
+                                                                    fullWidth
+                                                                    value={
+                                                                      activity.cost
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index,
+                                                                        "cost",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                >
+                                                                  <TextField
+                                                                    label="Notes"
+                                                                    size="small"
+                                                                    fullWidth
+                                                                    multiline
+                                                                    rows={2}
+                                                                    value={
+                                                                      activity.notes
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index,
+                                                                        "notes",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sx={{
+                                                                    textAlign:
+                                                                      "right",
+                                                                  }}
+                                                                >
+                                                                  <IconButton
+                                                                    color="error"
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                      handleDeleteItem(
+                                                                        destinationIndex,
+                                                                        "activities",
+                                                                        index
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    <DeleteIcon />
+                                                                  </IconButton>
+                                                                </Grid>
+                                                              </Grid>
+                                                            </Card>
+                                                          )}
+                                                        </Draggable>
+                                                      )
+                                                    )}
+                                                    {provided.placeholder}
+                                                  </Box>
+                                                )}
+                                              </Droppable>
+                                            </Box>
+                                          )}
+
+                                          {destination.activeSubTab ===
+                                            1 /* Expenses Panel - Same as before */ && (
+                                            <Box sx={{ mb: 2 }}>
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddExpense(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Expense
+                                              </Button>
+                                              <Droppable
+                                                droppableId={`destination-${destinationIndex}-expense`}
+                                              >
+                                                {(provided) => (
+                                                  <Box
+                                                    {...provided.droppableProps}
+                                                    ref={provided.innerRef}
+                                                    sx={{ mb: 2 }}
+                                                  >
+                                                    {destination.expenses.map(
+                                                      (expense, index) => (
+                                                        <Draggable
+                                                          key={expense.id}
+                                                          draggableId={
+                                                            expense.id
+                                                          }
+                                                          index={index}
+                                                        >
+                                                          {(provided) => (
+                                                            <Card
+                                                              ref={
+                                                                provided.innerRef
+                                                              }
+                                                              {...provided.draggableProps}
+                                                              {...provided.dragHandleProps}
+                                                              elevation={1}
+                                                              sx={{
+                                                                p: 1,
+                                                                mb: 1,
+                                                              }}
+                                                            >
+                                                              {/* Expense Form Fields - Same as before */}
+                                                              <Grid
+                                                                container
+                                                                spacing={1}
+                                                              >
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Item"
+                                                                    fullWidth
+                                                                    size="small"
+                                                                    value={
+                                                                      expense.item
+                                                                    }
                                                                     onChange={(
                                                                       e
                                                                     ) =>
@@ -3134,218 +3201,249 @@ const ItineraryPlanner = () => {
                                                                         destinationIndex,
                                                                         "expenses",
                                                                         index,
-                                                                        "category",
+                                                                        "item",
                                                                         e.target
                                                                           .value
                                                                       )
                                                                     }
-                                                                  >
-                                                                    {EXPENSE_CATEGORIES.map(
-                                                                      (
-                                                                        category
-                                                                      ) => (
-                                                                        <MenuItem
-                                                                          key={
-                                                                            category
-                                                                          }
-                                                                          value={
-                                                                            category
-                                                                          }
-                                                                        >
-                                                                          {
-                                                                            category
-                                                                          }
-                                                                        </MenuItem>
-                                                                      )
-                                                                    )}
-                                                                  </Select>
-                                                                </FormControl>
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Date"
-                                                                  size="small"
-                                                                  type="date"
-                                                                  fullWidth
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    expense.date
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "expenses",
-                                                                      index,
-                                                                      "date",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Time"
-                                                                  type="time"
-                                                                  size="small"
-                                                                  fullWidth
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    expense.time
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "expenses",
-                                                                      index,
-                                                                      "time",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sx={{
-                                                                  textAlign:
-                                                                    "right",
-                                                                }}
-                                                              >
-                                                                <IconButton
-                                                                  color="error"
-                                                                  size="small"
-                                                                  onClick={() =>
-                                                                    handleDeleteItem(
-                                                                      destinationIndex,
-                                                                      "expenses",
-                                                                      index
-                                                                    )
-                                                                  }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
                                                                 >
-                                                                  <DeleteIcon />
-                                                                </IconButton>
-                                                              </Grid>
-                                                            </Grid>
-                                                          </Card>
-                                                        )}
-                                                      </Draggable>
-                                                    )
-                                                  )}
-                                                  {provided.placeholder}
-                                                </Box>
-                                              )}
-                                            </Droppable>
-                                          </Box>
-                                        )}
-
-                                        {destination.activeSubTab ===
-                                          2 /* Reminders Panel - Same as before */ && (
-                                          <Box sx={{ mb: 2 }}>
-                                            <Button
-                                              variant="outlined"
-                                              onClick={() =>
-                                                handleAddReminder(
-                                                  destinationIndex
-                                                )
-                                              }
-                                              startIcon={<AddIcon />}
-                                            >
-                                              Add Reminder
-                                            </Button>
-                                            <Droppable
-                                              droppableId={`destination-${destinationIndex}-reminder`}
-                                            >
-                                              {(provided) => (
-                                                <Box
-                                                  {...provided.droppableProps}
-                                                  ref={provided.innerRef}
-                                                  sx={{ mb: 2 }}
-                                                >
-                                                  {destination.reminders.map(
-                                                    (reminder, index) => (
-                                                      <Draggable
-                                                        key={reminder.id}
-                                                        draggableId={
-                                                          reminder.id
-                                                        }
-                                                        index={index}
-                                                      >
-                                                        {(provided) => (
-                                                          <Card
-                                                            ref={
-                                                              provided.innerRef
-                                                            }
-                                                            {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
-                                                            elevation={1}
-                                                            sx={{ p: 1, mb: 1 }}
-                                                          >
-                                                            {/* Reminder Form Fields - Same as before */}
-                                                            <Grid
-                                                              container
-                                                              spacing={1}
-                                                            >
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Reminder Title"
-                                                                  fullWidth
-                                                                  size="small"
-                                                                  value={
-                                                                    reminder.title
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "reminders",
-                                                                      index,
-                                                                      "title",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <FormControl
-                                                                  fullWidth
-                                                                  size="small"
-                                                                >
-                                                                  <InputLabel>
-                                                                    Type
-                                                                  </InputLabel>
-                                                                  <Select
+                                                                  <TextField
+                                                                    label="Amount"
+                                                                    type="number"
+                                                                    size="small"
+                                                                    fullWidth
                                                                     value={
-                                                                      reminder.type
+                                                                      expense.amount
                                                                     }
-                                                                    label="Type"
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "expenses",
+                                                                        index,
+                                                                        "amount",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <FormControl
+                                                                    fullWidth
+                                                                    size="small"
+                                                                  >
+                                                                    <InputLabel>
+                                                                      Category
+                                                                    </InputLabel>
+                                                                    <Select
+                                                                      value={
+                                                                        expense.category
+                                                                      }
+                                                                      label="Category"
+                                                                      onChange={(
+                                                                        e
+                                                                      ) =>
+                                                                        handleInputChange(
+                                                                          destinationIndex,
+                                                                          "expenses",
+                                                                          index,
+                                                                          "category",
+                                                                          e
+                                                                            .target
+                                                                            .value
+                                                                        )
+                                                                      }
+                                                                    >
+                                                                      {EXPENSE_CATEGORIES.map(
+                                                                        (
+                                                                          category
+                                                                        ) => (
+                                                                          <MenuItem
+                                                                            key={
+                                                                              category
+                                                                            }
+                                                                            value={
+                                                                              category
+                                                                            }
+                                                                          >
+                                                                            {
+                                                                              category
+                                                                            }
+                                                                          </MenuItem>
+                                                                        )
+                                                                      )}
+                                                                    </Select>
+                                                                  </FormControl>
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Date"
+                                                                    size="small"
+                                                                    type="date"
+                                                                    fullWidth
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
+                                                                    value={
+                                                                      expense.date
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "expenses",
+                                                                        index,
+                                                                        "date",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Time"
+                                                                    type="time"
+                                                                    size="small"
+                                                                    fullWidth
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
+                                                                    value={
+                                                                      expense.time
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "expenses",
+                                                                        index,
+                                                                        "time",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sx={{
+                                                                    textAlign:
+                                                                      "right",
+                                                                  }}
+                                                                >
+                                                                  <IconButton
+                                                                    color="error"
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                      handleDeleteItem(
+                                                                        destinationIndex,
+                                                                        "expenses",
+                                                                        index
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    <DeleteIcon />
+                                                                  </IconButton>
+                                                                </Grid>
+                                                              </Grid>
+                                                            </Card>
+                                                          )}
+                                                        </Draggable>
+                                                      )
+                                                    )}
+                                                    {provided.placeholder}
+                                                  </Box>
+                                                )}
+                                              </Droppable>
+                                            </Box>
+                                          )}
+
+                                          {destination.activeSubTab ===
+                                            2 /* Reminders Panel - Same as before */ && (
+                                            <Box sx={{ mb: 2 }}>
+                                              <Button
+                                                variant="outlined"
+                                                onClick={() =>
+                                                  handleAddReminder(
+                                                    destinationIndex
+                                                  )
+                                                }
+                                                startIcon={<AddIcon />}
+                                              >
+                                                Add Reminder
+                                              </Button>
+                                              <Droppable
+                                                droppableId={`destination-${destinationIndex}-reminder`}
+                                              >
+                                                {(provided) => (
+                                                  <Box
+                                                    {...provided.droppableProps}
+                                                    ref={provided.innerRef}
+                                                    sx={{ mb: 2 }}
+                                                  >
+                                                    {destination.reminders.map(
+                                                      (reminder, index) => (
+                                                        <Draggable
+                                                          key={reminder.id}
+                                                          draggableId={
+                                                            reminder.id
+                                                          }
+                                                          index={index}
+                                                        >
+                                                          {(provided) => (
+                                                            <Card
+                                                              ref={
+                                                                provided.innerRef
+                                                              }
+                                                              {...provided.draggableProps}
+                                                              {...provided.dragHandleProps}
+                                                              elevation={1}
+                                                              sx={{
+                                                                p: 1,
+                                                                mb: 1,
+                                                              }}
+                                                            >
+                                                              {/* Reminder Form Fields - Same as before */}
+                                                              <Grid
+                                                                container
+                                                                spacing={1}
+                                                              >
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Reminder Title"
+                                                                    fullWidth
+                                                                    size="small"
+                                                                    value={
+                                                                      reminder.title
+                                                                    }
                                                                     onChange={(
                                                                       e
                                                                     ) =>
@@ -3353,238 +3451,273 @@ const ItineraryPlanner = () => {
                                                                         destinationIndex,
                                                                         "reminders",
                                                                         index,
-                                                                        "type",
+                                                                        "title",
                                                                         e.target
                                                                           .value
                                                                       )
                                                                     }
-                                                                  >
-                                                                    {REMINDER_TYPES.map(
-                                                                      (
-                                                                        type
-                                                                      ) => (
-                                                                        <MenuItem
-                                                                          key={
-                                                                            type
-                                                                          }
-                                                                          value={
-                                                                            type
-                                                                          }
-                                                                        >
-                                                                          {type}
-                                                                        </MenuItem>
-                                                                      )
-                                                                    )}
-                                                                  </Select>
-                                                                </FormControl>
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Date"
-                                                                  type="date"
-                                                                  fullWidth
-                                                                  size="small"
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    reminder.date
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "reminders",
-                                                                      index,
-                                                                      "date",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sm={6}
-                                                              >
-                                                                <TextField
-                                                                  label="Time"
-                                                                  type="time"
-                                                                  fullWidth
-                                                                  size="small"
-                                                                  InputLabelProps={{
-                                                                    shrink: true,
-                                                                  }}
-                                                                  value={
-                                                                    reminder.time
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    handleInputChange(
-                                                                      destinationIndex,
-                                                                      "reminders",
-                                                                      index,
-                                                                      "time",
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                />
-                                                              </Grid>
-                                                              <Grid
-                                                                item
-                                                                xs={12}
-                                                                sx={{
-                                                                  textAlign:
-                                                                    "right",
-                                                                }}
-                                                              >
-                                                                <IconButton
-                                                                  color="error"
-                                                                  size="small"
-                                                                  onClick={() =>
-                                                                    handleDeleteItem(
-                                                                      destinationIndex,
-                                                                      "reminders",
-                                                                      index
-                                                                    )
-                                                                  }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
                                                                 >
-                                                                  <DeleteIcon />
-                                                                </IconButton>
+                                                                  <FormControl
+                                                                    fullWidth
+                                                                    size="small"
+                                                                  >
+                                                                    <InputLabel>
+                                                                      Type
+                                                                    </InputLabel>
+                                                                    <Select
+                                                                      value={
+                                                                        reminder.type
+                                                                      }
+                                                                      label="Type"
+                                                                      onChange={(
+                                                                        e
+                                                                      ) =>
+                                                                        handleInputChange(
+                                                                          destinationIndex,
+                                                                          "reminders",
+                                                                          index,
+                                                                          "type",
+                                                                          e
+                                                                            .target
+                                                                            .value
+                                                                        )
+                                                                      }
+                                                                    >
+                                                                      {REMINDER_TYPES.map(
+                                                                        (
+                                                                          type
+                                                                        ) => (
+                                                                          <MenuItem
+                                                                            key={
+                                                                              type
+                                                                            }
+                                                                            value={
+                                                                              type
+                                                                            }
+                                                                          >
+                                                                            {
+                                                                              type
+                                                                            }
+                                                                          </MenuItem>
+                                                                        )
+                                                                      )}
+                                                                    </Select>
+                                                                  </FormControl>
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Date"
+                                                                    type="date"
+                                                                    fullWidth
+                                                                    size="small"
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
+                                                                    value={
+                                                                      reminder.date
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "reminders",
+                                                                        index,
+                                                                        "date",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sm={6}
+                                                                >
+                                                                  <TextField
+                                                                    label="Time"
+                                                                    type="time"
+                                                                    fullWidth
+                                                                    size="small"
+                                                                    InputLabelProps={{
+                                                                      shrink: true,
+                                                                    }}
+                                                                    value={
+                                                                      reminder.time
+                                                                    }
+                                                                    onChange={(
+                                                                      e
+                                                                    ) =>
+                                                                      handleInputChange(
+                                                                        destinationIndex,
+                                                                        "reminders",
+                                                                        index,
+                                                                        "time",
+                                                                        e.target
+                                                                          .value
+                                                                      )
+                                                                    }
+                                                                  />
+                                                                </Grid>
+                                                                <Grid
+                                                                  item
+                                                                  xs={12}
+                                                                  sx={{
+                                                                    textAlign:
+                                                                      "right",
+                                                                  }}
+                                                                >
+                                                                  <IconButton
+                                                                    color="error"
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                      handleDeleteItem(
+                                                                        destinationIndex,
+                                                                        "reminders",
+                                                                        index
+                                                                      )
+                                                                    }
+                                                                  >
+                                                                    <DeleteIcon />
+                                                                  </IconButton>
+                                                                </Grid>
                                                               </Grid>
-                                                            </Grid>
-                                                          </Card>
-                                                        )}
-                                                      </Draggable>
-                                                    )
-                                                  )}
-                                                  {provided.placeholder}
-                                                </Box>
-                                              )}
-                                            </Droppable>
-                                          </Box>
-                                        )}
-                                      </Grid>
+                                                            </Card>
+                                                          )}
+                                                        </Draggable>
+                                                      )
+                                                    )}
+                                                    {provided.placeholder}
+                                                  </Box>
+                                                )}
+                                              </Droppable>
+                                            </Box>
+                                          )}
+                                        </Grid>
 
-                                      <Grid item md={4} xs={12}>
-                                        <BudgetChart
-                                          expenses={destination.expenses}
-                                          activities={destination.activities}
-                                          budget={currentItinerary.budget}
-                                        />
+                                        <Grid item md={4} xs={12}>
+                                          <BudgetChart
+                                            expenses={destination.expenses}
+                                            activities={destination.activities}
+                                            budget={currentItinerary.budget}
+                                          />
+                                        </Grid>
                                       </Grid>
-                                    </Grid>
-                                  </Card>
-                                )}
-                              </Draggable>
-                            )
-                          )}
-                          {provided.placeholder}
-                        </Box>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                </TabPanel>
-
-                <TabPanel value={activeTab} index={2}>
-                  {/* Sharing Tab - Same as before, but ensure collaborator logic uses UIDs internally */}
-                  <Grid container spacing={3}>
-                    <Grid item xs={12}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={currentItinerary.isCollaborative}
-                            onChange={(e) =>
-                              handleItineraryInputChange(
-                                "isCollaborative",
-                                e.target.checked
+                                    </Card>
+                                  )}
+                                </Draggable>
                               )
-                            }
-                          />
-                        }
-                        label="Enable Collaboration"
-                      />
-                    </Grid>
+                            )}
+                            {provided.placeholder}
+                          </Box>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                  </TabPanel>
 
-                    {currentItinerary.isCollaborative && (
-                      <>
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            label="Add Collaborator Email"
-                            fullWidth
-                            placeholder="Enter email address"
-                            value={newCollaboratorEmail}
-                            onChange={(e) =>
-                              setNewCollaboratorEmail(e.target.value)
-                            }
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Button
-                            variant="contained"
-                            startIcon={<ShareIcon />}
-                            onClick={handleAddCollaborator}
-                          >
-                            Add Collaborator
-                          </Button>
-                        </Grid>
-                      </>
-                    )}
-
-                    {currentItinerary.collaborators.length > 0 && (
+                  <TabPanel value={activeTab} index={2}>
+                    {/* Sharing Tab - Same as before, but ensure collaborator logic uses UIDs internally */}
+                    <Grid container spacing={3}>
                       <Grid item xs={12}>
-                        <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                          Current Collaborators
-                        </Typography>
-                        <Box display="flex" flexWrap="wrap" gap={1}>
-                          {currentItinerary.collaborators.map(
-                            (collaborator, index) => (
-                              <Chip
-                                key={index}
-                                label={collaborator}
-                                onDelete={() =>
-                                  handleRemoveCollaborator(collaborator)
-                                }
-                              />
-                            )
-                          )}
-                        </Box>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={currentItinerary.isCollaborative}
+                              onChange={(e) =>
+                                handleItineraryInputChange(
+                                  "isCollaborative",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                          }
+                          label="Enable Collaboration"
+                        />
                       </Grid>
-                    )}
-                  </Grid>
-                </TabPanel>
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  onClick={resetModal}
-                  color="secondary"
-                  startIcon={<CloseIcon />}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddItinerary}
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                  variant="contained"
-                >
-                  {editItineraryId ? "Update" : "Save"}
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Grid>
+
+                      {currentItinerary.isCollaborative && (
+                        <>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Add Collaborator Email"
+                              fullWidth
+                              placeholder="Enter email address"
+                              value={newCollaboratorEmail}
+                              onChange={(e) =>
+                                setNewCollaboratorEmail(e.target.value)
+                              }
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Button
+                              variant="contained"
+                              startIcon={<ShareIcon />}
+                              onClick={handleAddCollaborator}
+                            >
+                              Add Collaborator
+                            </Button>
+                          </Grid>
+                        </>
+                      )}
+
+                      {currentItinerary.collaborators.length > 0 && (
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                            Current Collaborators
+                          </Typography>
+                          <Box display="flex" flexWrap="wrap" gap={1}>
+                            {currentItinerary.collaborators.map(
+                              (collaborator, index) => (
+                                <Chip
+                                  key={index}
+                                  label={collaborator}
+                                  onDelete={() =>
+                                    handleRemoveCollaborator(collaborator)
+                                  }
+                                />
+                              )
+                            )}
+                          </Box>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </TabPanel>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={resetModal}
+                    color="secondary"
+                    startIcon={<CloseIcon />}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAddItinerary}
+                    color="primary"
+                    startIcon={<SaveIcon />}
+                    variant="contained"
+                  >
+                    {editItineraryId ? "Update" : "Save"}
+                  </Button>
+                </DialogActions>
+              </Dialog>
+            </Grid>
+          </Box>
         </Box>
+        <Footer />
       </Box>
-      <Footer />
-    </Box>
+    </LoadScript>
   );
 };
 

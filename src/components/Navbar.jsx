@@ -70,6 +70,16 @@ const Navbar = () => {
           >
             Travel Planner
           </NavLink>
+          <NavLink
+            to="/map"
+            className={({ isActive }) =>
+              `hover:text-orange-500 transition duration-300 ${
+                isActive ? "text-orange-400" : ""
+              }`
+            }
+          >
+            Map
+          </NavLink>
 
           {/* User Profile (Desktop) */}
           <div className="relative group">

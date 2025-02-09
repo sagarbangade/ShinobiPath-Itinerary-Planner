@@ -6,6 +6,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import ItineraryPlanner from "./pages/ItineraryPlanner";
+import Map from "./pages/Map";
 
 function App() {
   return (
@@ -26,6 +27,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ItineraryPlanner />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/map"
+          element={
+            <ProtectedRoute>
+              <Map />
             </ProtectedRoute>
           }
         />

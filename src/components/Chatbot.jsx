@@ -163,7 +163,6 @@ const Chatbot = () => {
         </div>
 
         <ul className="messages" ref={messagesContainerRef}>
-          {console.log(userPhotoURL)}
           {loadingHistory && <li>Loading chat history...</li>}
           {messages.map((message, index) => (
             <li
