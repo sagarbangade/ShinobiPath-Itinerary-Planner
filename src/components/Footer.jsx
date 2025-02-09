@@ -1,8 +1,11 @@
 import { Link } from "react-router-dom"; // Import Link
 import { Facebook, Twitter, Instagram, Linkedin } from "lucide-react"; // Example social icons
+import Chatbot from "./Chatbot";
 
 const Footer = () => {
   return (
+    <>
+    <Chatbot />
     <footer className="bg-gray-950 text-gray-300 py-10 sm:py-12">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
@@ -82,6 +85,7 @@ const Footer = () => {
         </div>
       </div>
     </footer>
+    </>
   );
 };
 

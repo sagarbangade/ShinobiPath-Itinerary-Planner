@@ -4,7 +4,6 @@ import {
 import Footer from "../components/Footer";
 import LandingPageNavbar from "../components/LandingPageNavbar";
 import { useState, useEffect, useRef } from 'react';
-import Chatbot from "../components/Chatbot";
 
 const HomePage = () => {
   const [particles, setParticles] = useState([]);
@@ -353,7 +352,7 @@ const HomePage = () => {
           </button>
         </div>
       </section>
-      <Chatbot />
+      
       <Footer />
     </div>
   );
