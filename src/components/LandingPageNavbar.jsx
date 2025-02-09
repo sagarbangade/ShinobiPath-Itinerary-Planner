@@ -38,7 +38,7 @@ const LandingPageNavbar = () => {
         {/* Logo/Brand Name */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           <img
-            src="/src/assets/Logo/logo.png"
+            src="/logo.png"
             alt="ShinobiPath Logo"
             className="h-25 mr-2 slow-spin"
           />

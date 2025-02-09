@@ -13,7 +13,7 @@ const Footer = () => {
           <div className="ml-5">
             <div className="flex  items-center space-x-2 sm:space-x-3 mb-4">
               <img
-                src="/src/assets/Logo/logo.png"
+                src="/logo.png"
                 alt="ShinobiPath Logo"
                 className="h-25 mr-2 slow-spin"
               />

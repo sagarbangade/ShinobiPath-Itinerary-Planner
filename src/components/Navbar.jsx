@@ -35,7 +35,7 @@ const Navbar = () => {
         {/* Logo/Brand Name */}
         <div className="flex items-center">
           <img
-            src="/src/assets/Logo/logo.png"
+            src="/logo.png"
             alt="ShinobiPath Logo"
             className="h-12 mr-2 slow-spin"
           />
