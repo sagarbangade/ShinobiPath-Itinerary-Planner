@@ -52,11 +52,17 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+// Google Maps Imports  <-- ADD THESE
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  InfoWindow, // Optional, for info windows on markers
+} from "@react-google-maps/api";
 
 const CATEGORIES = ["leisure", "adventure", "cultural", "other"];
 const LOCATION_TYPES = ["city", "state", "country"];
 
-// Custom color palette (more visually appealing)
 const COLORS = [
   "#2E86C1",
   "#1E8449",
@@ -64,10 +70,29 @@ const COLORS = [
   "#CB4335",
   "#6C3483",
   "#3498DB",
-]; // Blues, Greens, Golds, Reds, Purples, Light Blues
-const CHART_BACKGROUND_COLOR = "#F9F9F9"; // Light gray chart background
-const CARD_BACKGROUND_COLOR = "#FFFFFF"; // White card background
-const DASHBOARD_BACKGROUND_COLOR = "#F4F6F7"; // Light gray dashboard background
+];
+const CHART_BACKGROUND_COLOR = "#F9F9F9";
+const CARD_BACKGROUND_COLOR = "#FFFFFF";
+const DASHBOARD_BACKGROUND_COLOR = "#F4F6F7";
+
+// Google Maps options  <-- ADD THIS
+const mapContainerStyle = {
+  height: "400px", // Adjust map height as needed
+  width: "100%",
+};
+const mapOptions = {
+  styles: [
+    // Optional: Customize map styles (e.g., remove POIs)
+    {
+      featureType: "poi",
+      elementType: "labels.icon",
+      stylers: [{ visibility: "off" }],
+    },
+  ],
+  disableDefaultUI: true, // Optional: Disable default UI controls
+  zoomControl: true, // Optional: Enable zoom controls
+  gestureHandling: "cooperative", // Optional: Gesture handling
+};
 
 const Dashboard = () => {
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -78,6 +103,68 @@ const Dashboard = () => {
   const [userItineraries, setUserItineraries] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [mapCenter, setMapCenter] = useState({ lat: 0, lng: 0 }); // Default map center
+  const [selectedPlace, setSelectedPlace] = useState(null); // For info window
+
+  const getFilteredLocations = useCallback(
+    // <-- MOVED UP HERE
+    (filterCategory, locationFilter) => {
+      let locations = []; // Change to array of location objects
+
+      let totalLat = 0; // For calculating map center
+      let totalLng = 0;
+      let locationCount = 0;
+
+      userItineraries.forEach((itinerary) => {
+        if (!filterCategory || itinerary.category === filterCategory) {
+          itinerary.destinations.forEach((destination) => {
+            if (
+              destination.location &&
+              destination.location.lat &&
+              destination.location.lng &&
+              destination.location.formattedAddress
+            ) {
+              const address = destination.location.formattedAddress;
+              let locationPart = "";
+              if (locationFilter.type === "city") {
+                const parts = address.split(",");
+                if (parts.length > 2) {
+                  locationPart = parts[parts.length - 3].trim();
+                }
+              } else if (locationFilter.type === "state") {
+                const parts = address.split(",");
+                if (parts.length > 1) {
+                  locationPart = parts[parts.length - 2].trim();
+                }
+              } else if (locationFilter.type === "country") {
+                locationPart = parts.split(",").pop().trim();
+              }
+
+              if (
+                !locationFilter.value ||
+                locationPart
+                  .toLowerCase()
+                  .includes(locationFilter.value.toLowerCase())
+              ) {
+                locations.push(destination.location); // Push the entire location object
+                totalLat += destination.location.lat;
+                totalLng += destination.location.lng;
+                locationCount++;
+              }
+            }
+          });
+        }
+      });
+
+      return locations; // Return array of location objects
+    },
+    [userItineraries, categoryFilter, locationFilter]
+  );
+
+  const filteredLocations = getFilteredLocations(
+    categoryFilter,
+    locationFilter
+  ); // Get locations here  // <-- INITIALIZED AFTER DEFINITION
 
   const getItinerariesCollection = useCallback(() => {
     if (!auth.currentUser) return null;
@@ -111,7 +198,6 @@ const Dashboard = () => {
       where("collaborators", "array-contains", auth.currentUser.uid)
     );
 
-    // ... (rest of fetchSharedItineraries and fetchAllItineraries are the same) ...
     try {
       const querySnapshot = await getDocs(q);
       const sharedItinerariesData = [];
@@ -246,45 +332,22 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [userItineraries]);
 
-  const getFilteredLocations = useCallback(
-    (filterCategory, locationFilter) => {
-      const locations = new Set();
-      userItineraries.forEach((itinerary) => {
-        if (!filterCategory || itinerary.category === filterCategory) {
-          itinerary.destinations.forEach((destination) => {
-            if (destination.location && destination.location.formattedAddress) {
-              const address = destination.location.formattedAddress;
-              let locationPart = "";
-              if (locationFilter.type === "city") {
-                const parts = address.split(",");
-                if (parts.length > 2) {
-                  locationPart = parts[parts.length - 3].trim();
-                }
-              } else if (locationFilter.type === "state") {
-                const parts = address.split(",");
-                if (parts.length > 1) {
-                  locationPart = parts[parts.length - 2].trim();
-                }
-              } else if (locationFilter.type === "country") {
-                locationPart = parts.split(",").pop().trim();
-              }
-
-              if (
-                !locationFilter.value ||
-                locationPart
-                  .toLowerCase()
-                  .includes(locationFilter.value.toLowerCase())
-              ) {
-                locations.add(locationPart);
-              }
-            }
-          });
-        }
+  useEffect(() => {
+    if (filteredLocations.length > 0) {
+      let totalLat = 0;
+      let totalLng = 0;
+      filteredLocations.forEach((loc) => {
+        totalLat += loc.lat;
+        totalLng += loc.lng;
       });
-      return Array.from(locations);
-    },
-    [userItineraries, categoryFilter, locationFilter]
-  );
+      setMapCenter({
+        lat: totalLat / filteredLocations.length,
+        lng: totalLng / filteredLocations.length,
+      });
+    } else {
+      setMapCenter({ lat: 0, lng: 0 });
+    }
+  }, [filteredLocations]);
 
   const handleLocationFilterChange = (event) => {
     setLocationFilter({
@@ -292,6 +355,9 @@ const Dashboard = () => {
       [event.target.name]: event.target.value,
     });
   };
+  const handleMarkerClick = useCallback((place) => {
+    setSelectedPlace(place); // Open info window for marker
+  }, []);
 
   const handleCreateNewPlanClick = () => {
     navigate("/itineraries");
@@ -304,10 +370,6 @@ const Dashboard = () => {
   // **CALCULATE STATISTICS HERE:**
   const upcomingTripsCount = countUpcomingTrips(categoryFilter);
   const completedTripsCount = countCompletedTrips(categoryFilter);
-  const filteredLocations = getFilteredLocations(
-    categoryFilter,
-    locationFilter
-  );
   const totalExpensesAmount = calculateTotalExpenses(categoryFilter);
   const upcomingReminders = getUpcomingReminders();
 
@@ -335,459 +397,520 @@ const Dashboard = () => {
 
   return (
     <>
-    
-    <Navbar />
-    <Box
-      sx={{
-        backgroundColor: DASHBOARD_BACKGROUND_COLOR,
-        minHeight: "100vh",
-        py: 3,
-      }}
-    >
-      {" "}
-      {/* Dashboard Background */}
-      
-      <Box className="p-4 max-w-7xl mx-auto">
-        {" "}
-        {/* Increased max width for content */}
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="center"
-          mb={4} // Increased margin bottom
-        >
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{ fontWeight: "bold", color: "primary.dark" }} // Darker primary color
+      <Navbar />
+      <Box
+        sx={{
+          backgroundColor: DASHBOARD_BACKGROUND_COLOR,
+          minHeight: "100vh",
+          py: 3,
+        }}
+      >
+        <Box className="p-4 max-w-7xl mx-auto">
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={4}
           >
-            Welcome back, {userName} 👋
-          </Typography>
-          <Box>
-            <FormControl
-              size="small"
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{ fontWeight: "bold", color: "black" }}
+            >
+              Welcome back, {userName} 👋 
+            </Typography>
+            <Box>
+              <FormControl
+                size="small"
+                sx={{
+                  mr: 2,
+                  backgroundColor: CARD_BACKGROUND_COLOR,
+                  borderRadius: 1,
+                  width: 150,
+                }}
+              >
+                <InputLabel id="category-filter-label">Category</InputLabel>
+                <Select
+                  labelId="category-filter-label"
+                  id="category-filter"
+                  value={categoryFilter}
+                  label="Filter Category"
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {CATEGORIES.map((category) => (
+                    <MenuItem key={category} value={category}>
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={handleCreateNewPlanClick}
+                sx={{ fontWeight: "bold" }}
+              >
+                Create New Plan
+              </Button>
+            </Box>
+          </Box>
+
+          {loading ? (
+            <Box
               sx={{
-                mr: 2,
-                backgroundColor: CARD_BACKGROUND_COLOR,
-                borderRadius: 1,
-                width:130
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "300px",
               }}
             >
-              {" "}
-              {/* Filter Background */}
-              <InputLabel id="category-filter-label">Category</InputLabel>
-              <Select
-                labelId="category-filter-label"
-                id="category-filter"
-                value={categoryFilter}
-                label="Filter Category"
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {CATEGORIES.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category.charAt(0).toUpperCase() + category.slice(1)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleCreateNewPlanClick}
-              sx={{ fontWeight: "bold" }} // Bold button text
-            >
-              Create New Plan
-            </Button>
-          </Box>
-        </Box>
-        {loading ? (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "300px", // Increased height for loading
-            }}
-          >
-            <CircularProgress size={60} /> {/* Larger loader */}
-          </Box>
-        ) : (
-          <Grid container spacing={4}>
-            {" "}
-            {/* Increased spacing */}
-            {/* --- Summary Cards Section --- */}
-            <Grid item xs={12} md={3}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                {" "}
-                {/* Card Styling */}
-                <CardContent sx={{ textAlign: "center", padding: 3 }}>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    color="textSecondary"
-                    gutterBottom
-                  >
-                    {" "}
-                    {/* Subtitle styling */}
-                    Upcoming Trips
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    color="primary"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    {" "}
-                    {/* Statistic number styling */}
-                    {upcomingTripsCount}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent sx={{ textAlign: "center", padding: 3 }}>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    color="textSecondary"
-                    gutterBottom
-                  >
-                    Completed Trips
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    color="success"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    {completedTripsCount}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent sx={{ textAlign: "center", padding: 3 }}>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    color="textSecondary"
-                    gutterBottom
-                  >
-                    Total Expenses
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    color="secondary"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    ₹{totalExpensesAmount.toFixed(2)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent sx={{ textAlign: "center", padding: 3 }}>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    color="textSecondary"
-                    gutterBottom
-                  >
-                    Locations Visited
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    color="warning"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    {filteredLocations.length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            {/* --- Charts Section --- */}
-            <Grid item xs={12} md={6}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    component="h3"
-                    mb={2}
-                    fontWeight="bold"
-                    color="textPrimary"
-                  >
-                    {" "}
-                    {/* Chart title styling */}
-                    Itinerary Categories
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={350}>
-                    {" "}
-                    {/* Increased chart height */}
-                    <PieChart background={CHART_BACKGROUND_COLOR}>
-                      {" "}
-                      {/* Chart Background */}
-                      <Pie
-                        data={categoryPieChartData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50} // Added inner radius for donut chart
-                        outerRadius={120} // Increased outer radius
-                        paddingAngle={2} // Added padding between slices
-                        fill="#8884d8"
-                        labelLine={false} // Removed label lines
-                        label={renderCustomLabel} // Custom label rendering for better positioning
-                      >
-                        {categoryPieChartData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Legend
-                        layout="vertical"
-                        align="right"
-                        verticalAlign="middle"
-                      />{" "}
-                      {/* Styled Legend */}
-                      <RechartsTooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    component="h3"
-                    mb={2}
-                    fontWeight="bold"
-                    color="textPrimary"
-                  >
-                    Expenses by Category
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart
-                      data={expenseCategoryBarChartData}
-                      background={CHART_BACKGROUND_COLOR}
+              <CircularProgress size={60} />
+            </Box>
+          ) : (
+            <Grid container spacing={4}>
+              {/* Summary Cards (same as before) */}
+              <Grid item xs={12} md={3}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent sx={{ textAlign: "center", padding: 3 }}>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="textSecondary"
+                      gutterBottom
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#BDBDBD" />{" "}
-                      {/* Lighter gridlines */}
-                      <XAxis dataKey="name" tick={{ fill: "gray" }} />{" "}
-                      {/* X-axis tick color */}
-                      <YAxis tick={{ fill: "gray" }} />{" "}
-                      {/* Y-axis tick color */}
-                      <RechartsTooltip
-                        wrapperStyle={{
-                          backgroundColor: CARD_BACKGROUND_COLOR,
-                          padding: "10px",
-                          border: "1px solid #E0E0E0",
-                          borderRadius: "5px",
-                        }}
-                      />{" "}
-                      {/* Styled Tooltip */}
-                      <Legend
-                        iconType="plainline"
-                        textStyle={{ color: "#757575" }}
-                      />{" "}
-                      {/* Styled Legend */}
-                      <Bar
-                        dataKey="value"
-                        fill="#2ECC71"
-                        barSize={30}
-                        label={{ fill: "#424242" }}
-                      />{" "}
-                      {/* Bar styling: color, size, labels */}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </Grid>
-            {/* --- Location Filter Section --- */}
-            <Grid item xs={12} md={4}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    component="h3"
-                    mb={3}
-                    fontWeight="bold"
-                    color="textPrimary"
-                  >
-                    {" "}
-                    {/* Filter title styling */}
-                    Location Insights
-                  </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 2,
-                      mb: 3,
-                      flexDirection: "column",
-                    }}
-                  >
-                    {" "}
-                    {/* Filter controls spacing */}
-                    <FormControl
-                      size="small"
-                      sx={{ backgroundColor: "#F0F0F0", borderRadius: 1 }}
+                      Upcoming Trips
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      color="primary"
+                      sx={{ fontWeight: "bold" }}
                     >
-                      {" "}
-                      {/* Filter Select Background */}
-                      <InputLabel
-                        id="location-type-label"
-                        sx={{ color: "textSecondary" }}
+                      {upcomingTripsCount}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent sx={{ textAlign: "center", padding: 3 }}>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="textSecondary"
+                      gutterBottom
+                    >
+                      Completed Trips
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      color="success"
+                      sx={{ fontWeight: "bold" }}
+                    >
+                      {completedTripsCount}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent sx={{ textAlign: "center", padding: 3 }}>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="textSecondary"
+                      gutterBottom
+                    >
+                      Total Expenses
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      color="secondary"
+                      sx={{ fontWeight: "bold" }}
+                    >
+                      ₹{totalExpensesAmount.toFixed(2)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent sx={{ textAlign: "center", padding: 3 }}>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="textSecondary"
+                      gutterBottom
+                    >
+                      Locations Visited
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      color="warning"
+                      sx={{ fontWeight: "bold" }}
+                    >
+                      {filteredLocations.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Charts Section (same as before) */}
+              <Grid item xs={12} md={6}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      mb={2}
+                      fontWeight="bold"
+                      color="textPrimary"
+                    >
+                      Itinerary Categories
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <PieChart background={CHART_BACKGROUND_COLOR}>
+                        <Pie
+                          data={categoryPieChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50} // Added inner radius for donut chart
+                          outerRadius={120} // Increased outer radius
+                          paddingAngle={2} // Added padding between slices
+                          fill="#8884d8"
+                          labelLine={false} // Removed label lines
+                          label={renderCustomLabel} // Custom label rendering for better positioning
+                        >
+                          {categoryPieChartData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Legend
+                          layout="vertical"
+                          align="right"
+                          verticalAlign="middle"
+                        />{" "}
+                        {/* Styled Legend */}
+                        <RechartsTooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      mb={2}
+                      fontWeight="bold"
+                      color="textPrimary"
+                    >
+                      Expenses by Category
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart
+                        data={expenseCategoryBarChartData}
+                        background={CHART_BACKGROUND_COLOR}
                       >
-                        Filter Type
-                      </InputLabel>{" "}
-                      {/* Filter Label Styling */}
-                      <Select
-                        labelId="location-type-label"
-                        id="location-type"
-                        name="type"
-                        value={locationFilter.type}
-                        label="Type"
-                        onChange={handleLocationFilterChange}
+                        <CartesianGrid strokeDasharray="3 3" stroke="#BDBDBD" />{" "}
+                        {/* Lighter gridlines */}
+                        <XAxis dataKey="name" tick={{ fill: "gray" }} />{" "}
+                        {/* X-axis tick color */}
+                        <YAxis tick={{ fill: "gray" }} />{" "}
+                        {/* Y-axis tick color */}
+                        <RechartsTooltip
+                          wrapperStyle={{
+                            backgroundColor: CARD_BACKGROUND_COLOR,
+                            padding: "10px",
+                            border: "1px solid #E0E0E0",
+                            borderRadius: "5px",
+                          }}
+                        />{" "}
+                        {/* Styled Tooltip */}
+                        <Legend
+                          iconType="plainline"
+                          textStyle={{ color: "#757575" }}
+                        />{" "}
+                        {/* Styled Legend */}
+                        <Bar
+                          dataKey="value"
+                          fill="#2ECC71"
+                          barSize={30}
+                          label={{ fill: "#424242" }}
+                        />{" "}
+                        {/* Bar styling: color, size, labels */}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </Grid>
+{/* Visited Locations Map Section */}
+<Grid item xs={12} md={12}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      mb={2}
+                      fontWeight="bold"
+                      color="textPrimary"
+                    >
+                      Visited Locations on Map
+                    </Typography>
+                    <LoadScript
+                      googleMapsApiKey="AIzaSyCFfwfN3JhDm1sXkfBoUMfB-Tz-xYLjaXo"
+                      libraries={["places"]}
+                    >
+                      <GoogleMap
+                        mapContainerStyle={mapContainerStyle}
+                        center={mapCenter}
+                        zoom={2} // Adjust zoom level as needed
+                        options={mapOptions}
                       >
-                        {LOCATION_TYPES.map((type) => (
-                          <MenuItem key={type} value={type}>
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      size="small"
-                      label={`Filter by ${locationFilter.type}`}
-                      name="value"
-                      value={locationFilter.value}
-                      onChange={handleLocationFilterChange}
-                      sx={{ backgroundColor: "#F0F0F0", borderRadius: 1 }} // Filter Textfield Background
-                    />
-                  </Box>
-                  <Typography variant="subtitle1" mb={1} color="textSecondary">
-                    Filtered Locations:
-                  </Typography>
-                  <List
-                    dense
-                    style={{
-                      maxHeight: 200,
-                      overflow: "auto",
-                      border: "1px solid #E0E0E0",
-                      borderRadius: 1,
-                      padding: 1,
-                      backgroundColor: "#FAFAFA",
-                    }}
-                  >
-                    {" "}
-                    {/* Location List Styling */}
-                    {filteredLocations.length > 0 ? (
-                      filteredLocations.map((location, index) => (
-                        <ListItem key={index} divider>
-                          <ListItemText
-                            primaryTypographyProps={{ color: "textPrimary" }}
-                            primary={location}
-                          />{" "}
-                          {/* Location Text Color */}
-                        </ListItem>
-                      ))
-                    ) : (
-                      <ListItem>
-                        <ListItemText primary="No locations found." />
-                      </ListItem>
-                    )}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-            {/* --- Upcoming Reminders Section --- */}
-            <Grid item xs={12} md={8}>
-              <Card
-                elevation={3}
-                sx={{ backgroundColor: CARD_BACKGROUND_COLOR, borderRadius: 2 }}
-              >
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    component="h3"
-                    mb={3}
-                    fontWeight="bold"
-                    color="textPrimary"
-                  >
-                    {" "}
-                    {/* Reminder Title Styling */}
-                    Next 5 Upcoming Reminders
-                  </Typography>
-                  <List dense>
-                    {upcomingReminders.length > 0 ? (
-                      upcomingReminders.map((reminder, index) => (
-                        <ListItem key={index} divider>
-                          <ListItemIcon sx={{ color: "#757575" }}>
-                            {" "}
-                            {/* Reminder Icon Color */}
-                            <Alarm color="action" />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={
-                              <Typography
-                                fontWeight="medium"
-                                color="textPrimary"
+                        {filteredLocations.map((location, index) => (
+                          <Marker
+                            key={index}
+                            position={{ lat: location.lat, lng: location.lng }}
+                            title={location.name} // Or use destination name if available
+                            onClick={() => handleMarkerClick(location)} // Handle marker click
+                          >
+                            {selectedPlace === location && ( // Show info window if selected
+                              <InfoWindow
+                                position={{
+                                  lat: location.lat,
+                                  lng: location.lng,
+                                }}
+                                onCloseClick={() => setSelectedPlace(null)}
                               >
-                                {reminder.title}
-                              </Typography>
-                            } // Reminder Primary text styling
-                            secondary={`${reminder.destinationName} (${
-                              reminder.itineraryTitle
-                            }) - ${moment(reminder.date).format("LL")}`} // Reminder Secondary text styling
-                          />
+                                <Box>
+                                  <Typography
+                                    variant="subtitle1"
+                                    fontWeight="bold"
+                                  >
+                                    {location.name || location.formattedAddress}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {location.formattedAddress}
+                                  </Typography>
+                                </Box>
+                              </InfoWindow>
+                            )}
+                          </Marker>
+                        ))}
+                      </GoogleMap>
+                    </LoadScript>
+                  </CardContent>
+                </Card>
+              </Grid>
+              {/* Location Filter (same as before) */}
+              <Grid item xs={12} md={4}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      mb={3}
+                      fontWeight="bold"
+                      color="textPrimary"
+                    >
+                      Location Insights
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 2,
+                        mb: 3,
+                        flexDirection: "column",
+                      }}
+                    >
+                      <FormControl
+                        size="small"
+                        sx={{ backgroundColor: "#F0F0F0", borderRadius: 1 }}
+                      >
+                        <InputLabel
+                          id="location-type-label"
+                          sx={{ color: "textSecondary" }}
+                        >
+                          Filter Type
+                        </InputLabel>
+                        <Select
+                          labelId="location-type-label"
+                          id="location-type"
+                          name="type"
+                          value={locationFilter.type}
+                          label="Type"
+                          onChange={handleLocationFilterChange}
+                        >
+                          {LOCATION_TYPES.map((type) => (
+                            <MenuItem key={type} value={type}>
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        size="small"
+                        label={`Filter by ${locationFilter.type}`}
+                        name="value"
+                        value={locationFilter.value}
+                        onChange={handleLocationFilterChange}
+                        sx={{ backgroundColor: "#F0F0F0", borderRadius: 1 }}
+                      />
+                    </Box>
+                    <Typography
+                      variant="subtitle1"
+                      mb={1}
+                      color="textSecondary"
+                    >
+                      Filtered Locations:
+                    </Typography>
+                    <List
+                      dense
+                      style={{
+                        maxHeight: 200,
+                        overflow: "auto",
+                        border: "1px solid #E0E0E0",
+                        borderRadius: 1,
+                        padding: 1,
+                        backgroundColor: "#FAFAFA",
+                      }}
+                    >
+                      {filteredLocations.length > 0 ? (
+                        filteredLocations.map((location, index) => (
+                          <ListItem key={index} divider>
+                            <ListItemText
+                              primaryTypographyProps={{ color: "textPrimary" }}
+                              primary={location.name}
+                            />{" "}
+                            {/* Display location name */}
+                          </ListItem>
+                        ))
+                      ) : (
+                        <ListItem>
+                          <ListItemText primary="No locations found." />
                         </ListItem>
-                      ))
-                    ) : (
-                      <ListItem>
-                        <ListItemText primary="No upcoming reminders." />
-                      </ListItem>
-                    )}
-                  </List>
-                </CardContent>
-              </Card>
+                      )}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Upcoming Reminders (same as before) */}
+              <Grid item xs={12} md={8}>
+                <Card
+                  elevation={3}
+                  sx={{
+                    backgroundColor: CARD_BACKGROUND_COLOR,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      mb={3}
+                      fontWeight="bold"
+                      color="textPrimary"
+                    >
+                      Next 5 Upcoming Reminders
+                    </Typography>
+                    <List dense>
+                      {upcomingReminders.length > 0 ? (
+                        upcomingReminders.map((reminder, index) => (
+                          <ListItem key={index} divider>
+                            <ListItemIcon sx={{ color: "#757575" }}>
+                              <Alarm color="action" />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  fontWeight="medium"
+                                  color="textPrimary"
+                                >
+                                  {reminder.title}
+                                </Typography>
+                              }
+                              secondary={`${reminder.destinationName} (${
+                                reminder.itineraryTitle
+                              }) - ${moment(reminder.date).format("LL")}`}
+                            />
+                          </ListItem>
+                        ))
+                      ) : (
+                        <ListItem>
+                          <ListItemText primary="No upcoming reminders." />
+                        </ListItem>
+                      )}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              
             </Grid>
-          </Grid>
-        )}
+          )}
+        </Box>
       </Box>
-    </Box>
       <Footer />
-</>
+    </>
   );
 };
 
-// Custom label rendering for PieChart (for better positioning)
 const renderCustomLabel = ({
   cx,
   cy,
@@ -799,7 +922,7 @@ const renderCustomLabel = ({
   name,
 }) => {
   const RADIAN = Math.PI / 180;
-  const radius = innerRadius + (outerRadius - innerRadius) * 1.3; // Adjust label position
+  const radius = innerRadius + (outerRadius - innerRadius) * 1.3;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
   return (
