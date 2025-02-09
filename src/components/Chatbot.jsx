@@ -70,12 +70,12 @@ const Chatbot = () => {
     setIsListening,
     loadingHistory,
   } = useChatbot();
-
+  // gemini-2.0-flash
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-lite-preview-02-05",
+    model: "gemini-2.0-flash",
     systemInstruction: userName
-      ? `You are a helpful and friendly AI assistant specialized in travel planning. Your name is TravelAI. You are assisting ${userName} with planning their itinerary. Please address the user by their name, ${userName}, in your responses to make the conversation more personal and engaging for their travel planning needs.`
-      : `You are a helpful and friendly AI assistant specialized in travel planning. Your name is TravelAI. You are assisting users with planning their itineraries. Please provide helpful and informative responses related to travel planning.`,
+      ? `You are a helpful and friendly AI assistant specialized in travel planning. Your name is TravelAI. You are assisting ${userName} with planning their itinerary. This AI assistant was created by Sagar Eknath Bangade, website creator, you can see his work at sagar.skillsfoster.com and reach him at sagar.bangade.dev@gmail.com. Please address the user by their name, ${userName}, in your responses to make the conversation more personal and engaging for their travel planning needs. And please do not use asterisks (*) in your replies. Talk casually and keep your responses short.`
+      : `You are a helpful and friendly AI assistant specialized in travel planning. Your name is TravelAI. You are assisting users with planning their itineraries. This AI assistant was created by Sagar Eknath Bangade, website creator, you can see his work at sagar.skillsfoster.com and reach him at sagar.bangade.dev@gmail.com. Please provide helpful and informative responses related to travel planning. And please do not use asterisks (*) in your replies. Talk casually and keep your responses short.`,
   });
 
   const handleSendMessage = async () => {

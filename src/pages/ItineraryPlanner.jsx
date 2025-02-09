@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { InputAdornment } from "@mui/material";
 import { Search as SearchIcon } from "@mui/icons-material";
+import ItineraryMap from "../components/ItineraryMap";
 import {
   useItineraryData,
   ItineraryDataProvider,
@@ -1872,33 +1873,34 @@ const ItineraryPlanner = () => {
                                         fontWeight: "bold",
                                         color: "#546e7a",
                                         fontSize: "1rem",
+                                        marginRight: "5px",
                                       }} // Adjusted subtitle size
                                     >
                                       Category:
                                     </Typography>
+                                    <Chip
+                                      label={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).category
+                                      }
+                                      size="small"
+                                      sx={{
+                                        backgroundColor: "#ffe0b2",
+                                        color: "#ef6c00",
+                                        fontWeight: "bold",
+                                        fontSize: "0.8rem", // Slightly smaller chip font size
+                                      }}
+                                      icon={
+                                        <LabelIcon
+                                          style={{
+                                            color: "#ef6c00",
+                                            fontSize: "1rem", // Adjusted chip icon size
+                                          }}
+                                        />
+                                      }
+                                    />
                                   </Box>
-                                  <Chip
-                                    label={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).category
-                                    }
-                                    size="small"
-                                    sx={{
-                                      backgroundColor: "#ffe0b2",
-                                      color: "#ef6c00",
-                                      fontWeight: "bold",
-                                      fontSize: "0.8rem", // Slightly smaller chip font size
-                                    }}
-                                    icon={
-                                      <LabelIcon
-                                        style={{
-                                          color: "#ef6c00",
-                                          fontSize: "1rem", // Adjusted chip icon size
-                                        }}
-                                      />
-                                    }
-                                  />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                   <Box
@@ -1915,42 +1917,43 @@ const ItineraryPlanner = () => {
                                         fontWeight: "bold",
                                         color: "#546e7a",
                                         fontSize: "1rem",
+                                        marginRight: "5px",
                                       }} // Adjusted subtitle size
                                     >
                                       Collaborative:
                                     </Typography>
+                                    <Chip
+                                      label={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative
+                                          ? "Yes"
+                                          : "No"
+                                      }
+                                      size="small"
+                                      color={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative
+                                          ? "success"
+                                          : "default"
+                                      }
+                                      sx={{
+                                        fontSize: "0.8rem", // Slightly smaller chip font size
+                                      }}
+                                      icon={
+                                        userItineraries.find(
+                                          (it) => it.id === viewItineraryId
+                                        ).isCollaborative ? (
+                                          <CheckIcon
+                                            style={{
+                                              fontSize: "1rem", // Adjusted chip icon size
+                                            }}
+                                          />
+                                        ) : null
+                                      }
+                                    />
                                   </Box>
-                                  <Chip
-                                    label={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative
-                                        ? "Yes"
-                                        : "No"
-                                    }
-                                    size="small"
-                                    color={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative
-                                        ? "success"
-                                        : "default"
-                                    }
-                                    sx={{
-                                      fontSize: "0.8rem", // Slightly smaller chip font size
-                                    }}
-                                    icon={
-                                      userItineraries.find(
-                                        (it) => it.id === viewItineraryId
-                                      ).isCollaborative ? (
-                                        <CheckIcon
-                                          style={{
-                                            fontSize: "1rem", // Adjusted chip icon size
-                                          }}
-                                        />
-                                      ) : null
-                                    }
-                                  />
                                 </Grid>
                               </Grid>
                             </CardContent>
@@ -2480,6 +2483,43 @@ const ItineraryPlanner = () => {
                               </Card>
                             ))}
                         </Grid>
+                        {/* Map Section */}
+                        <Grid item xs={12}>
+                          <Card
+                            elevation={3}
+                            sx={{
+                              borderRadius: 2,
+                              mt: 3, // Add margin top to separate from destinations
+                            }}
+                          >
+                            <CardContent>
+                              <Typography
+                                variant="h6"
+                                component="h3"
+                                mb={2}
+                                fontWeight="bold"
+                                color="textPrimary"
+                              >
+                                Locations on Map
+                              </Typography>
+                              <LoadScript
+                                googleMapsApiKey="AIzaSyCFfwfN3JhDm1sXkfBoUMfB-Tz-xYLjaXo"
+                                libraries={["places"]}
+                              >
+                                {console.log(
+                                  "Destinations being passed to ItineraryMap:",
+                                  userItineraries.find(
+                                    (it) => it.id === viewItineraryId
+                                  )?.destinations
+                                )}
+                                <ItineraryMap
+                                  itineraryId={viewItineraryId}
+                                  userItineraries={userItineraries}
+                                />
+                              </LoadScript>
+                            </CardContent>
+                          </Card>
+                        </Grid>
                       </Grid>{" "}
                       {/* End Main Grid Container */}
                     </Box>
@@ -2755,7 +2795,7 @@ const ItineraryPlanner = () => {
                                               label="Search Destination"
                                               fullWidth
                                               placeholder="Enter a destination"
-                                              // value={destination.name} 
+                                              // value={destination.name}
                                               onChange={(e) => {
                                                 handleDestinationChange(
                                                   destinationIndex,
