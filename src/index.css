@@ -51,9 +51,15 @@
 }
 
 
-pac-container.pac-logo{
-  display: block;
-  background-color: aliceblue;
-  color: #000000;
 
+/* Example CSS - may need to be more specific */
+.pac-container.pac-logo {
+  /* Replace with the actual class name */
+  color: black !important; /* Ensure text is black or another visible color */
+  opacity: 1 !important; /* Ensure opacity is fully visible */
+  visibility: visible !important; /* Ensure visibility is not hidden */
+  z-index: 10000 !important; /* Ensure it's on top of other elements */
+  position: fixed;
+  top: 0;
 }
+
