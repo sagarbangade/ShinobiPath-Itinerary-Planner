@@ -21,7 +21,7 @@ const Login = () => {
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        navigate("/dashboard");
+        navigate("/itineraries");
       }
     });
 
