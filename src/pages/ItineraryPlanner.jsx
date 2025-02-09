@@ -1275,6 +1275,7 @@ const ItineraryPlanner = () => {
                                       },
                                       gap: { xs: 2, sm: 0 },
                                       padding: 3, // Slightly more padding inside
+                                      // backgroundColor:"red",
                                     }}
                                   >
                                     <Box
@@ -1318,8 +1319,8 @@ const ItineraryPlanner = () => {
                                             />
                                           ) : itinerary.category ===
                                             "adventure" ? (
-                                            <ShareIcon
-                                              sx={{ fontSize: "1.2rem" }}
+                                            <LabelIcon
+                                              sx={{ fontSize: "1.2rem", color:"" }}
                                             />
                                           ) : itinerary.category ===
                                             "cultural" ? (
