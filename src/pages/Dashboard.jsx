@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
 import {
@@ -94,6 +94,9 @@ const mapOptions = {
   gestureHandling: "cooperative", // Optional: Gesture handling
 };
 
+// Define libraries outside of the component to prevent re-renders
+const libraries = ["places"];
+
 const Dashboard = () => {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState({
@@ -105,9 +108,9 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [mapCenter, setMapCenter] = useState({ lat: 0, lng: 0 }); // Default map center
   const [selectedPlace, setSelectedPlace] = useState(null); // For info window
+  const isMapLoaded = useRef(false); // useRef to track map loading
 
   const getFilteredLocations = useCallback(
-    // <-- MOVED UP HERE
     (filterCategory, locationFilter) => {
       let locations = []; // Change to array of location objects
 
@@ -158,13 +161,10 @@ const Dashboard = () => {
 
       return locations; // Return array of location objects
     },
-    [userItineraries, categoryFilter, locationFilter]
+    [userItineraries]
   );
 
-  const filteredLocations = getFilteredLocations(
-    categoryFilter,
-    locationFilter
-  ); // Get locations here  // <-- INITIALIZED AFTER DEFINITION
+  const filteredLocations = useMemo(() => getFilteredLocations(categoryFilter, locationFilter), [getFilteredLocations, categoryFilter, locationFilter]);
 
   const getItinerariesCollection = useCallback(() => {
     if (!auth.currentUser) return null;
@@ -261,42 +261,37 @@ const Dashboard = () => {
   }, [fetchOwnedItineraries, fetchSharedItineraries]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      await fetchAllItineraries();
-      setLoading(false);
-    };
-    fetchData();
+    fetchAllItineraries();
   }, [fetchAllItineraries]);
 
   // --- Data Processing / Statistics Functions ---
   const countUpcomingTrips = useCallback(
-    (filterCategory) => {
+    () => {
       return userItineraries.filter(
         (itinerary) =>
           moment(itinerary.endDate).isAfter(moment()) &&
-          (!filterCategory || itinerary.category === filterCategory)
+          (!categoryFilter || itinerary.category === categoryFilter)
       ).length;
     },
     [userItineraries, categoryFilter]
   );
 
   const countCompletedTrips = useCallback(
-    (filterCategory) => {
+    () => {
       return userItineraries.filter(
         (itinerary) =>
           moment(itinerary.endDate).isBefore(moment()) &&
-          (!filterCategory || itinerary.category === filterCategory)
+          (!categoryFilter || itinerary.category === categoryFilter)
       ).length;
     },
     [userItineraries, categoryFilter]
   );
 
   const calculateTotalExpenses = useCallback(
-    (filterCategory) => {
+    () => {
       let totalExpenses = 0;
       userItineraries.forEach((itinerary) => {
-        if (!filterCategory || itinerary.category === filterCategory) {
+        if (!categoryFilter || itinerary.category === categoryFilter) {
           itinerary.destinations.forEach((destination) => {
             (destination.expenses || []).forEach((expense) => {
               totalExpenses += parseFloat(expense.amount) || 0;
@@ -368,20 +363,20 @@ const Dashboard = () => {
     : "User";
 
   // **CALCULATE STATISTICS HERE:**
-  const upcomingTripsCount = countUpcomingTrips(categoryFilter);
-  const completedTripsCount = countCompletedTrips(categoryFilter);
-  const totalExpensesAmount = calculateTotalExpenses(categoryFilter);
+  const upcomingTripsCount = useMemo(() => countUpcomingTrips(), [countUpcomingTrips]);
+  const completedTripsCount = useMemo(() => countCompletedTrips(), [countCompletedTrips]);
+  const totalExpensesAmount = useMemo(() => calculateTotalExpenses(), [calculateTotalExpenses]);
   const upcomingReminders = getUpcomingReminders();
 
   // --- Chart Data Preparation ---
-  const categoryPieChartData = CATEGORIES.map((category) => ({
+  const categoryPieChartData = useMemo(() => CATEGORIES.map((category) => ({
     name: category,
     value: userItineraries.filter(
       (itinerary) => itinerary.category === category
     ).length,
-  }));
+  })), [userItineraries]);
 
-  const expenseCategoryBarChartData = EXPENSE_CATEGORIES.map((category) => {
+  const expenseCategoryBarChartData = useMemo(() => EXPENSE_CATEGORIES.map((category) => {
     let categoryExpense = 0;
     userItineraries.forEach((itinerary) => {
       itinerary.destinations.forEach((destination) => {
@@ -393,7 +388,7 @@ const Dashboard = () => {
       });
     });
     return { name: category, value: categoryExpense };
-  });
+  }), [userItineraries]);
 
   return (
     <>
@@ -417,7 +412,7 @@ const Dashboard = () => {
               component="h1"
               sx={{ fontWeight: "bold", color: "black" }}
             >
-              Welcome back, {userName} 👋 
+              Welcome back, {userName} 👋
             </Typography>
             <Box>
               <FormControl
@@ -687,8 +682,8 @@ const Dashboard = () => {
                   </CardContent>
                 </Card>
               </Grid>
-{/* Visited Locations Map Section */}
-<Grid item xs={12} md={12}>
+              {/* Visited Locations Map Section */}
+              <Grid item xs={12} md={12}>
                 <Card
                   elevation={3}
                   sx={{
@@ -706,10 +701,15 @@ const Dashboard = () => {
                     >
                       Visited Locations on Map
                     </Typography>
-                    <LoadScript
-                      googleMapsApiKey="AIzaSyCFfwfN3JhDm1sXkfBoUMfB-Tz-xYLjaXo"
-                      libraries={["places"]}
-                    >
+                    {/* LoadScript rendering only once using useRef */}
+                    {!isMapLoaded.current && (
+                      <LoadScript
+                        googleMapsApiKey="AIzaSyCFfwfN3JhDm1sXkfBoUMfB-Tz-xYLjaXo"
+                        libraries={libraries} // Use the constant libraries
+                        onLoad={() => { isMapLoaded.current = true; }} // Set ref when loaded
+                      />
+                    )}
+                    {isMapLoaded.current && (
                       <GoogleMap
                         mapContainerStyle={mapContainerStyle}
                         center={mapCenter}
@@ -747,7 +747,9 @@ const Dashboard = () => {
                           </Marker>
                         ))}
                       </GoogleMap>
-                    </LoadScript>
+                    )}
+                    {!isMapLoaded.current && <CircularProgress />} {/* Loading indicator until map is loaded */}
+
                   </CardContent>
                 </Card>
               </Grid>
@@ -901,7 +903,7 @@ const Dashboard = () => {
                 </Card>
               </Grid>
 
-              
+
             </Grid>
           )}
         </Box>

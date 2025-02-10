@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react"; // ADDED useEffect import
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   GoogleMap,
   Marker,
   InfoWindow,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { Box, Typography, Alert } from "@mui/material"; // Import Alert for error messages
+import { Box, Typography, Alert } from "@mui/material";
 
 const mapContainerStyle = {
   height: "400px",
@@ -20,9 +20,9 @@ const mapOptions = {
 const ItineraryMap = ({ itineraryId, userItineraries }) => {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [destinationDistances, setDestinationDistances] = useState({});
-  const [distanceError, setDistanceError] = useState(null); // State for distance calculation errors
-  const [mapLoadError, setMapLoadError] = useState(null); // State for map loading errors
-  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false); // Loading state for distance calculation
+  const [distanceError, setDistanceError] = useState(null);
+  const [mapLoadError, setMapLoadError] = useState(null);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   const currentItinerary = useMemo(() => {
     return userItineraries.find((it) => it.id === itineraryId);
@@ -59,15 +59,13 @@ const ItineraryMap = ({ itineraryId, userItineraries }) => {
     libraries: ["places", "geometry"],
   });
 
-  // Set map load error if useJsApiLoader detects an error
   useEffect(() => {
     if (loadError) {
       setMapLoadError(loadError);
     } else {
-      setMapLoadError(null); // Clear any previous error if loading succeeds
+      setMapLoadError(null);
     }
   }, [loadError]);
-
 
   const calculateDistance = useCallback(async (origin, destination) => {
     if (!isLoaded) return null;
@@ -97,8 +95,8 @@ const ItineraryMap = ({ itineraryId, userItineraries }) => {
     if (isLoaded && itineraryDestinations.length > 1) {
       const distances = {};
       let totalDistanceMeters = 0;
-      setDistanceError(null); // Clear any previous distance error
-      setIsCalculatingDistance(true); // Start loading state for distance calculation
+      setDistanceError(null);
+      setIsCalculatingDistance(true);
 
       for (let i = 0; i < itineraryDestinations.length - 1; i++) {
         const origin = itineraryDestinations[i].location;
@@ -112,19 +110,19 @@ const ItineraryMap = ({ itineraryId, userItineraries }) => {
         } catch (error) {
           console.error("Error calculating distance:", error);
           setDistanceError("Error calculating distances. Please try again later.");
-          setIsCalculatingDistance(false); // End loading state on error
-          break; // Stop calculating further distances if one fails
+          setIsCalculatingDistance(false);
+          break;
         }
       }
       if (!distanceError) {
         distances['total'] = { value: totalDistanceMeters, text: formatDistance(totalDistanceMeters) };
         setDestinationDistances(distances);
-        setIsCalculatingDistance(false); // End loading state after successful calculation
+        setIsCalculatingDistance(false);
       }
     } else {
       setDestinationDistances({});
       setDistanceError(null);
-      setIsCalculatingDistance(false); // Ensure loading state is off when not calculating
+      setIsCalculatingDistance(false);
     }
   }, [itineraryDestinations, calculateDistance, isLoaded]);
 
@@ -155,6 +153,10 @@ const ItineraryMap = ({ itineraryId, userItineraries }) => {
     return <Typography>Itinerary not found.</Typography>;
   }
 
+  if (!itineraryDestinations || itineraryDestinations.length === 0) {
+    return <Typography>Destinations are not provided.</Typography>;
+  }
+
   return (
     <>
     <GoogleMap
@@ -164,43 +166,45 @@ const ItineraryMap = ({ itineraryId, userItineraries }) => {
       options={mapOptions}
     >
       {itineraryDestinations.map((location, index) => (
-        <Marker
-          key={index}
-          position={{ lat: location.location.lat, lng: location.location.lng }}
-          title={location.name}
-          onClick={() => setSelectedPlace(location)}
-        >
-          {selectedPlace === location && (
-            <InfoWindow
-              position={{
-                lat: location.location.lat,
-                lng: location.location.lng,
-              }}
-              onCloseClick={() => setSelectedPlace(null)}
-            >
-              <Box>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {location.name}
-                </Typography>
-                {location.formattedAddress && (
-                  <Typography variant="body2">
-                    {location.formattedAddress}
+        location.location && location.location.lat && location.location.lng ? ( // Added check for location data
+          <Marker
+            key={index}
+            position={{ lat: location.location.lat, lng: location.location.lng }}
+            title={location.name}
+            onClick={() => setSelectedPlace(location)}
+          >
+            {selectedPlace === location && (
+              <InfoWindow
+                position={{
+                  lat: location.location.lat,
+                  lng: location.location.lng,
+                }}
+                onCloseClick={() => setSelectedPlace(null)}
+              >
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {location.name}
                   </Typography>
-                )}
-                {index < itineraryDestinations.length - 1 && destinationDistances[`${location.id}-${itineraryDestinations[index + 1].id}`] && (
-                  <Typography variant="body2">
-                    Distance to next destination: {formatDistance(destinationDistances[`${location.id}-${itineraryDestinations[index + 1].id}`]?.value)}
-                  </Typography>
-                )}
-                {isCalculatingDistance && index === 0 && ( // Show loading near first marker while calculating
-                  <Typography variant="body2" color="textSecondary">
-                    Calculating distances...
-                  </Typography>
-                )}
-              </Box>
-            </InfoWindow>
-          )}
-        </Marker>
+                  {location.formattedAddress && (
+                    <Typography variant="body2">
+                      {location.formattedAddress}
+                    </Typography>
+                  )}
+                  {index < itineraryDestinations.length - 1 && destinationDistances[`${location.id}-${itineraryDestinations[index + 1].id}`] && (
+                    <Typography variant="body2">
+                      Distance to next destination: {formatDistance(destinationDistances[`${location.id}-${itineraryDestinations[index + 1].id}`]?.value)}
+                    </Typography>
+                  )}
+                  {isCalculatingDistance && index === 0 && (
+                    <Typography variant="body2" color="textSecondary">
+                      Calculating distances...
+                    </Typography>
+                  )}
+                </Box>
+              </InfoWindow>
+            )}
+          </Marker>
+        ) : null // If location data is missing, don't render the marker
       ))}
       {distanceError && (
         <Alert severity="warning" sx={{ mt: 2 }}>
