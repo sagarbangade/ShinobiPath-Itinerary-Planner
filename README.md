@@ -42,11 +42,11 @@ shinobipath-itinerary-planner/
 
 ## Video Walkthrough of the project
 
-[**[Project Feature Walkthrough Video Link Here]**](https://your-video-link-features.com) - 
+[**[Project Feature Walkthrough Video Link Here]**](https://youtu.be/C7m0yvJqfyg) - 
 
 ## Video Walkthrough of the codebase
 
-[**[Codebase Walkthrough Video Link Here]**](https://your-video-link-codebase.com) - 
+[**[Codebase Walkthrough Video Link Here]**](https://youtu.be/KgsMYd_JAO4) - 
 
 ## Features
 
@@ -101,7 +101,7 @@ To run this project locally, follow these steps:
 
 4.  **Set up Google Maps API Key:**
     *   Obtain a Google Maps API key with the Places API, Maps JavaScript API, and Distance Matrix API enabled from the [Google Cloud Console](https://console.cloud.google.com/).
-    *   Replace the placeholder API key value `"AIzaSyDHTUzAPE4mdiY6bKHtghFPEzmOJQUXI6I"` in `src/pages/Map.js` and other components using Google Maps APIs with your actual Google Maps API key.
+    *   Replace the placeholder API key value `"YOUR_API_KEY"` in `src/pages/Map.js` and other components using Google Maps APIs with your actual Google Maps API key.
     *   Ensure billing is enabled for your Google Cloud project as required by Google Maps Platform.
 
 5.  **Set up Google Gemini API Key:**
